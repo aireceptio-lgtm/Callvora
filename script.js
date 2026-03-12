@@ -163,7 +163,6 @@ function navigate(pageId) {
   if (_renders[pageId]) { page.innerHTML = _renders[pageId](); page.classList.add('active'); }
   setTimeout(animateBars, 50);
   window.scrollTo({ top: 0, behavior: 'smooth' });
-  updateNotificationBell(); // Triggers the floating Bell!
 }
 
 function rerenderPage(pageId) {
@@ -172,7 +171,6 @@ function rerenderPage(pageId) {
     p.innerHTML = _renders[pageId]();
     setTimeout(animateBars, 50);
   }
-  updateNotificationBell(); // Triggers the floating Bell!
 }
 /* ══════════════════════════════════════════════════════════════
    CLIENT PAGES
@@ -208,81 +206,6 @@ async function autoSuspendCheck(d, stats) {
       showToast('System Auto-Suspended ' + d.name + ' due to limit reach.', 'error');
     }
   }
-}
-
-/* ── NOTIFICATIONS ENGINE ─────────────────────────────────────── */
-function getNotifications() {
-  var notifs = [];
-  var cu = STATE.currentUser;
-  if (!cu) return notifs;
-
-  var isAdmin = cu.role === 'ADMIN';
-  // Admin sees all dealerships; Client only sees their own
-  var dList = isAdmin ? STATE.dealerships : STATE.dealerships.filter(function (x) { return x.id === cu.dealershipId; });
-
-  dList.forEach(function (d) {
-    if (!d.minute_limit) return; // Skip if no limit set
-    var dCalls = STATE.calls.filter(function (x) { return x.dealershipId === d.id; });
-    var stats = getDealerStats(d, dCalls);
-
-    var prefix = isAdmin ? escH(d.name) + ': ' : 'Your Account: ';
-
-    // 1. Minute Limit Checks
-    if (stats.usedMin >= stats.limit) {
-      notifs.push({ type: 'critical', msg: '🚨 ' + prefix + 'Minute limit REACHED (' + stats.usedMin.toFixed(2) + ' / ' + stats.limit + ' min). System Suspended.' });
-    } else if (stats.usedMin >= stats.limit * 0.85) {
-      notifs.push({ type: 'warning', msg: '⚠️ ' + prefix + 'Nearing minute limit (' + stats.usedMin.toFixed(2) + ' / ' + stats.limit + ' min).' });
-    }
-
-    // 2. 30-Day Cycle Checks (Even if minutes are remaining)
-    if (stats.daysLeft <= 0) {
-      notifs.push({ type: 'critical', msg: '📅 ' + prefix + '30-Day billing cycle has EXPIRED. System Suspended.' });
-    } else if (stats.daysLeft <= 5) {
-      notifs.push({ type: 'warning', msg: '⏳ ' + prefix + 'Billing cycle ends in ' + stats.daysLeft + ' days.' });
-    }
-  });
-
-  return notifs;
-}
-
-function updateNotificationBell() {
-  var notifs = getNotifications();
-  var count = notifs.length;
-  var bellBtn = document.getElementById('global-notif-btn');
-
-  if (!bellBtn) {
-    bellBtn = document.createElement('button');
-    bellBtn.id = 'global-notif-btn';
-    bellBtn.className = 'btn btn-secondary'; // Removed btn-icon for manual centering
-    // UPDATED: Added Flexbox centering below
-    bellBtn.style.cssText = 'position:fixed;top:24px;right:32px;z-index:90;border-radius:50%;width:42px;height:42px;box-shadow:0 4px 12px rgba(0,0,0,.3);transition:transform 0.2s;display:flex;align-items:center;justify-content:center;padding:0;';
-    bellBtn.onmouseover = function () { this.style.transform = 'scale(1.05)'; };
-    bellBtn.onmouseout = function () { this.style.transform = 'scale(1)'; };
-    bellBtn.onclick = openNotificationsModal;
-    document.body.appendChild(bellBtn);
-  }
-
-  var badgeHtml = count > 0 ? '<div style="position:absolute;top:-4px;right:-4px;background:var(--rose);color:#fff;font-size:11px;font-family:\'Syne\',sans-serif;font-weight:700;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid var(--bg-900);box-shadow:0 2px 4px rgba(0,0,0,.3)">' + count + '</div>' : '';
-  // UPDATED: Wrapped icon in a flex div for perfect alignment
-  bellBtn.innerHTML = '<div style="display:flex">' + icon('bell', 20) + '</div>' + badgeHtml;
-}
-
-function openNotificationsModal() {
-  var notifs = getNotifications();
-  var html = '<div class="modal-header-bar"><h2>Alerts & Notifications</h2><button class="modal-close-btn" onclick="closeModalDirect()">✕</button></div><div class="modal-body-inner" style="max-height:60vh;overflow-y:auto;padding-right:4px">';
-
-  if (notifs.length === 0) {
-    html += '<div class="empty-state" style="padding:40px">' + icon('bell', 32) + '<br><br>No new notifications</div>';
-  } else {
-    notifs.forEach(function (n) {
-      var bg = n.type === 'critical' ? 'rgba(244,63,94,.1)' : 'rgba(245,158,11,.1)';
-      var border = n.type === 'critical' ? 'rgba(244,63,94,.3)' : 'rgba(245,158,11,.3)';
-      var color = n.type === 'critical' ? 'var(--rose)' : 'var(--amber)';
-      html += '<div style="background:' + bg + ';border:1px solid ' + border + ';color:' + color + ';padding:16px;border-radius:12px;margin-bottom:12px;font-size:14px;line-height:1.5;font-weight:500">' + n.msg + '</div>';
-    });
-  }
-  html += '</div>';
-  openModal(html);
 }
 
 /* ── CLIENT: DASHBOARD ────────────────────────────────────────── */
