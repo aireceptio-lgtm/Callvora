@@ -127,8 +127,16 @@ function initApp() {
     navHtml += '<div class="nav-link" onclick="navigate(\'' + escQ(n.id) + '\')" id="nav-' + escQ(n.id) + '" tabindex="0" role="button">' + icon(n.icon, 15) + '<span>' + escH(n.label) + '</span><span class="nav-chevron">' + icon('chevron', 12) + '</span></div>';
   });
   document.getElementById('sidebar-nav').innerHTML = navHtml;
-  if (isAdmin) { listenToDealerships(); listenToUsers(); listenToVehicles(null); listenToLeads(null); listenToCalls(null); }
-  else { listenToVehicles(u.dealershipId); listenToLeads(u.dealershipId); listenToCalls(u.dealershipId); }
+  if (isAdmin) {
+    listenToDealerships(); listenToUsers(); listenToVehicles(null); listenToLeads(null); listenToCalls(null);
+  } else {
+    if (u.dealershipId) {
+      listenToVehicles(u.dealershipId); listenToLeads(u.dealershipId); listenToCalls(u.dealershipId);
+    } else {
+      console.warn('Orphaned client account - blocking data fetch.');
+      STATE.vehicles = []; STATE.leads = []; STATE.calls = [];
+    }
+  }
   navigate(isAdmin ? 'admin' : 'dashboard');
 }
 function toggleSidebar() { var s = document.getElementById('sidebar'), o = document.getElementById('sidebar-overlay'); s.classList.toggle('open'); o.classList[s.classList.contains('open') ? 'add' : 'remove']('show'); }
