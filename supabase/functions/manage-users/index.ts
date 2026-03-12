@@ -22,12 +22,15 @@ serve(async (req) => {
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) throw new Error('Missing Authorization header');
     
-    const token = authHeader.replace('Bearer ', '');
-    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
+    // Create a regular client with the incoming auth header for validation rather than service role
+    const supabaseClient = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY') || '', {
+      global: { headers: { Authorization: authHeader } }
+    });
     
+    const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
     if (authError || !user) throw new Error('Unauthorized');
 
-    // Get the caller's profile to verify they are an ADMIN
+    // Get the caller's profile to verify they are an ADMIN using the admin client to bypass RLS
     const { data: callerProfile } = await supabaseAdmin.from('users').select('role').eq('id', user.id).single();
     if (!callerProfile || callerProfile.role !== 'ADMIN') {
         throw new Error('Forbidden: Only admins can manage users');
