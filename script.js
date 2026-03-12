@@ -626,7 +626,7 @@ function renderDealerships() {
     return ms && mSt && mPl;
   });
 
-  return '<div class="page-header-row"><div><div class="page-title font-display">Dealerships</div><div class="page-sub">' + d.length + ' registered accounts</div></div><div style="display:flex;gap:8px;"><button onclick="openNotificationModal()" class="btn btn-secondary">' + icon('bell', 15) + ' Send Reminder</button><button onclick="openDealershipModal()" class="btn btn-primary">' + icon('plus', 15) + ' Create Dealership</button></div></div>' +
+  return '<div class="page-header-row"><div><div class="page-title font-display">Dealerships</div><div class="page-sub">' + d.length + ' registered accounts</div></div><button onclick="openDealershipModal()" class="btn btn-primary">' + icon('plus', 15) + ' Create Dealership</button></div>' +
     '<div class="filters-bar"><div style="position:relative;flex:1;min-width:180px"><div style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-3);pointer-events:none">' + icon('search', 14) + '</div><input class="input" style="padding-left:38px" placeholder="Search by name, email, or ID..." value="' + escH(STATE.dSearch) + '" oninput="STATE.dSearch=this.value;rerenderPage(\'dealerships\')" maxlength="100"></div>' +
     '<select class="input" style="width:auto;min-width:140px" onchange="STATE.dStat=this.value;rerenderPage(\'dealerships\')"><option value="">All Status</option><option value="active" ' + (fS === 'active' ? 'selected' : '') + '>Active</option><option value="suspended" ' + (fS === 'suspended' ? 'selected' : '') + '>Suspended</option></select>' +
     '<select class="input" style="width:auto;min-width:140px" onchange="STATE.dPlan=this.value;rerenderPage(\'dealerships\')"><option value="">All Plans</option><option value="starter" ' + (fP === 'starter' ? 'selected' : '') + '>Starter</option><option value="pro" ' + (fP === 'pro' ? 'selected' : '') + '>Pro</option><option value="enterprise" ' + (fP === 'enterprise' ? 'selected' : '') + '>Enterprise</option></select></div>' +
@@ -1429,41 +1429,6 @@ async function deleteDealership(id) {
 }
 
 /* ── ADMIN NOTIFICATIONS ──────────────────────────────────── */
-
-function openNotificationModal() {
-  var dOpts = '<option value="">-- Select a Dealership --</option>' + STATE.dealerships.map(function (d) {
-    return '<option value="' + escH(d.id) + '">' + escH(d.name) + '</option>';
-  }).join('');
-
-  openModal(
-    '<div class="modal-header-bar"><h2>Send Reminder Notification</h2><button class="modal-close-btn" onclick="closeModalDirect()">✕</button></div>' +
-    '<div class="modal-body-inner">' +
-    '<p style="color:var(--text-2);font-size:13px;margin-bottom:16px;">Send a direct text notification to a dealership\'s CRM dashboard.</p>' +
-    '<div class="form-grid">' +
-    '<div class="form-group"><label>Select Dealership <span class="req">*</span></label><select id="nDealer" class="form-input">' + dOpts + '</select></div>' +
-    '<div class="form-group"><label>Notification Message <span class="req">*</span></label><textarea id="nMessage" class="form-input" style="height:100px;resize:vertical;" placeholder="e.g. Please update your billing information..."></textarea></div>' +
-    '</div>' +
-    '<div class="modal-actions" style="margin-top:24px"><button class="btn btn-secondary" onclick="closeModalDirect()">Cancel</button><button class="btn btn-primary" onclick="sendNotification()">Send Message</button></div>' +
-    '</div>'
-  );
-}
-
-async function sendNotification() {
-  var dealerId = document.getElementById('nDealer').value;
-  var message = sanitizeInput(document.getElementById('nMessage').value.trim());
-
-  if (!dealerId) { showToast('Please select a dealership.', 'warn'); return; }
-  if (!message) { showToast('Please enter a message.', 'warn'); return; }
-
-  showToast('Sending notification...', 'info');
-
-  // Currently simulating a backend send, as Callvora UI doesn't have an inbuilt notifications table yet.
-  // In a real application, you'd insert into a "notifications" Supabase table here.
-  setTimeout(function () {
-    closeModalDirect();
-    showToast('Notification successfully sent to dealership!', 'success');
-  }, 1000);
-}
 
 /* ── USER CRUD (ADMIN ONLY) ───────────────────────────────── */
 function openUserModal(editId) {
