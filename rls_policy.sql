@@ -24,12 +24,12 @@ AS $$
 $$;
 
 CREATE OR REPLACE FUNCTION public.get_user_dealership_id()
-RETURNS uuid
+RETURNS text
 LANGUAGE sql
 SECURITY DEFINER
 SET search_path = public
 AS $$
-  SELECT dealership_id::uuid FROM users WHERE id = auth.uid();
+  SELECT dealership_id FROM users WHERE id = auth.uid();
 $$;
 
 -- ==============================================================================
