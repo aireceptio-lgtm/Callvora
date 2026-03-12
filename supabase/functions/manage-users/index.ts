@@ -12,48 +12,52 @@ serve(async (req) => {
   }
 
   try {
+    // Step 1: Init Env
     const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') || '';
 
-    // Create a Supabase client with the service role key to manage admin actions
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+    if (!supabaseUrl || !supabaseServiceKey) {
+        throw new Error('Server misconfiguration: Missing Supabase URL or Service Key');
+    }
 
-    // Verify token and check if caller is an ADMIN
+    // Step 2: Validate Auth Header
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) throw new Error('Missing Authorization header');
-    
-    // Create a regular client with the incoming auth header for validation rather than service role
-    const supabaseClient = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY') || '', {
+
+    // Step 3: Create Clients
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+    const supabaseClient = createClient(supabaseUrl, supabaseAnonKey || supabaseServiceKey, {
       global: { headers: { Authorization: authHeader } }
     });
     
+    // Step 4: Verify User Session
     const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
-    if (authError || !user) throw new Error('Unauthorized');
+    if (authError || !user) throw new Error('Unauthorized Session: ' + (authError?.message || 'No user found'));
 
-    // Get the caller's profile to verify they are an ADMIN using the admin client to bypass RLS
-    const { data: callerProfile } = await supabaseAdmin.from('users').select('role').eq('id', user.id).single();
+    // Step 5: Verify Admin privileges
+    const { data: callerProfile, error: profileErr } = await supabaseAdmin.from('users').select('role').eq('id', user.id).single();
+    if (profileErr) throw new Error('Failed to fetch user profile: ' + profileErr.message);
     if (!callerProfile || callerProfile.role !== 'ADMIN') {
         throw new Error('Forbidden: Only admins can manage users');
     }
 
+    // Step 6: Parse Payload
     const { action, payload } = await req.json()
 
     if (action === 'createUser') {
       const { email, password, name, role, dealership_id } = payload;
       
-      // 1. Create the user in Supabase Auth
+      // Step 7: Create Auth User
       const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
         email: email,
         password: password,
         email_confirm: true
       });
-      if (createError) throw createError;
+      if (createError) throw new Error('Auth Creation Error: ' + createError.message);
+      if (!newUser || !newUser.user) throw new Error('Failed to create user in Auth layer.');
 
-      if (!newUser || !newUser.user) {
-         throw new Error('Failed to create user in Auth');
-      }
-
-      // 2. Insert into public users table
+      // Step 8: Insert Public User
       const { error: insertError } = await supabaseAdmin.from('users').insert({
         id: newUser.user.id,
         email: email,
@@ -62,10 +66,10 @@ serve(async (req) => {
         dealership_id: dealership_id || null
       });
       
-      // If insertion fails, rollback the auth user
       if (insertError) {
+        // Rollback
         await supabaseAdmin.auth.admin.deleteUser(newUser.user.id);
-        throw insertError;
+        throw new Error('Database Insertion Error: ' + insertError.message);
       }
 
       return new Response(JSON.stringify({ success: true, user: newUser.user }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
