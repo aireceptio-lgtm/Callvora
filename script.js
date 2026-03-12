@@ -602,9 +602,9 @@ function renderAllUsers() {
       u.map(function (uu, i) {
         var dealer = d.find(function (x) { return x.id === uu.dealershipId; }); return '<tr>' +
           '<td class="table-td-num">' + (i + 1) + '</td><td class="table-td"><span style="color:var(--text-1);font-weight:500">' + escH(uu.name) + '</span></td><td class="table-td" style="color:var(--text-3)">' + escH(uu.email) + '</td>' +
-          '<td class="table-th"><span class="badge ' + roleBadge(uu.role) + '">' + escH(uu.role) + '</span></td><td class="table-td" style="font-size:12px;color:var(--text-3)">' + escH(dealer ? dealer.name : '–') + '</td>' +
+          '<td class="table-td"><span class="badge ' + roleBadge(uu.role) + '">' + escH(uu.role) + '</span></td><td class="table-td" style="font-size:12px;color:var(--text-3)">' + escH(dealer ? dealer.name : '–') + '</td>' +
           '<td class="table-td" style="font-size:11px;color:var(--text-3)">' + fmtDateShort(uu.created_at) + '</td>' +
-          '<td class="table-td">' + (STATE.currentUser && STATE.currentUser.id === uu.id ? '<span style="color:var(--text-3);font-size:12px">Current</span>' : '<button onclick="promptDelete(\\\'user\\\', \\\'' + escQ(uu.id) + '\\\')" class="btn btn-ghost btn-sm" style="color:var(--danger)">' + icon('trash', 14) + '</button>') + '</td></tr>';
+          '<td class="table-td" style="display:flex;gap:6px">' + (STATE.currentUser && STATE.currentUser.id === uu.id ? '<span style="color:var(--text-3);font-size:12px">Current User</span>' : '<button onclick="openUserModal(\'' + escQ(uu.id) + '\')" class="btn btn-ghost btn-sm" style="color:var(--text-2)">' + icon('pencil', 14) + '</button><button onclick="promptDelete(\'user\', \'' + escQ(uu.id) + '\')" class="btn btn-ghost btn-sm" style="color:var(--danger)">' + icon('trash', 14) + '</button>') + '</td></tr>';
       }).join('')) +
     '</tbody></table></div></div>';
 }
@@ -1421,39 +1421,47 @@ async function deleteDealership(id) {
 }
 
 /* ── USER CRUD (ADMIN ONLY) ───────────────────────────────── */
-function openUserModal() {
+function openUserModal(editId) {
   var cu = STATE.currentUser;
   if (!cu || cu.role !== 'ADMIN') { showToast('Unauthorized', 'error'); return; }
 
+  var u = editId ? STATE.users.find(function (x) { return x.id === editId; }) : null;
+  var title = u ? 'Edit User' : 'Add New User';
+
+  // For assignments, identify the active selected dealership
+  var selectedDealer = u ? u.dealershipId : '';
   var dealerSelectHtml = '<div class="form-group"><label>Assign to Dealership</label><select id="uDealer" class="form-input"><option value="">No Dealership (Admin)</option>' +
-    STATE.dealerships.map(function (d) { return '<option value="' + escH(d.id) + '">' + escH(d.name) + '</option>'; }).join('') +
+    STATE.dealerships.map(function (d) { return '<option value="' + escH(d.id) + '" ' + (selectedDealer === d.id ? 'selected' : '') + '>' + escH(d.name) + '</option>'; }).join('') +
     '</select></div>';
 
   openModal(
-    '<div class="modal-header-bar"><h2>Add New User</h2><button class="modal-close-btn" onclick="closeModalDirect()">✕</button></div>' +
+    '<div class="modal-header-bar"><h2>' + title + '</h2><button class="modal-close-btn" onclick="closeModalDirect()">✕</button></div>' +
     '<div class="modal-body-inner">' +
     '<div class="form-grid">' +
-    '<div class="form-group"><label>Name <span class="req">*</span></label><input id="uName" class="form-input" maxlength="100" placeholder="e.g. Jane Doe"></div>' +
-    '<div class="form-group"><label>Email <span class="req">*</span></label><input id="uEmail" class="form-input" type="email" maxlength="120" placeholder="user@example.com"></div>' +
-    '<div class="form-group"><label>Password <span class="req">*</span></label><input id="uPass" class="form-input" type="password" maxlength="60" placeholder="Min 6 characters"></div>' +
-    '<div class="form-group"><label>Role <span class="req">*</span></label><select id="uRole" class="form-input" onchange="document.getElementById(\\\'uDealerWrapper\\\').style.display = this.value === \\\'CLIENT\\\' ? \\\'block\\\' : \\\'none\\\'"><option value="CLIENT" selected>Client</option><option value="ADMIN">Admin</option></select></div>' +
+    '<div class="form-group"><label>Name <span class="req">*</span></label><input id="uName" class="form-input" maxlength="100" value="' + escH(u ? u.name || '' : '') + '" placeholder="e.g. Jane Doe"></div>' +
+    '<div class="form-group"><label>Email <span class="req">*</span></label><input id="uEmail" class="form-input" type="email" maxlength="120" value="' + escH(u ? u.email || '' : '') + '" placeholder="user@example.com"' + (u ? ' readonly style="opacity:0.6;cursor:not-allowed;"' : '') + '></div>' +
+    '<div class="form-group"><label>Password ' + (u ? '<span style="font-size:11px;font-weight:normal;color:var(--text-3)">(Leave blank to keep current)</span>' : '<span class="req">*</span>') + '</label><input id="uPass" class="form-input" type="password" maxlength="60" placeholder="' + (u ? 'New password (min 6 chars)' : 'Min 6 characters') + '"></div>' +
+    '<div class="form-group"><label>Role <span class="req">*</span></label><select id="uRole" class="form-input" onchange="document.getElementById(\'uDealerWrapper\').style.display = this.value === \'CLIENT\' ? \'block\' : \'none\'">' +
+    '<option value="CLIENT" ' + (u && u.role === 'CLIENT' ? 'selected' : '') + '>Client</option>' +
+    '<option value="ADMIN" ' + (u && u.role === 'ADMIN' ? 'selected' : (!u ? '' : '')) + '>Admin</option></select></div>' +
     '</div>' +
-    '<div id="uDealerWrapper" style="display:block; margin-top: 16px;">' + dealerSelectHtml + '</div>' +
-    '<div class="modal-actions" style="margin-top:24px"><button class="btn btn-secondary" onclick="closeModalDirect()">Cancel</button><button class="btn btn-primary" onclick="saveUser()">Create User</button></div>' +
+    '<div id="uDealerWrapper" style="display:' + (u && u.role === 'ADMIN' ? 'none' : 'block') + '; margin-top: 16px;">' + dealerSelectHtml + '</div>' +
+    '<div class="modal-actions" style="margin-top:24px"><button class="btn btn-secondary" onclick="closeModalDirect()">Cancel</button><button class="btn btn-primary" onclick="saveUser(' + (u ? '\'' + escQ(String(u.id)) + '\'' : 'null') + ')">' + (u ? 'Update User' : 'Create User') + '</button></div>' +
     '</div>'
   );
 }
 
-async function saveUser() {
+async function saveUser(editId) {
   var name = sanitizeInput(document.getElementById('uName').value.trim());
   var email = sanitizeInput(document.getElementById('uEmail').value.trim());
-  var password = document.getElementById('uPass').value; // Don't strictly sanitize passwords to allow symbols
+  var password = document.getElementById('uPass').value;
   var role = document.getElementById('uRole').value;
   var dealerSelect = document.getElementById('uDealer');
   var dealerId = role === 'CLIENT' && dealerSelect ? dealerSelect.value : null;
 
-  if (!name || !email || !password) { showToast('Name, Email, and Password are required.', 'warn'); return; }
-  if (password.length < 6) { showToast('Password must be at least 6 characters long.', 'warn'); return; }
+  if (!name || !email) { showToast('Name and Email are required.', 'warn'); return; }
+  if (!editId && !password) { showToast('Password is required for new users.', 'warn'); return; }
+  if (password && password.length < 6) { showToast('Password must be at least 6 characters long.', 'warn'); return; }
   if (role === 'CLIENT' && !dealerId) { showToast('Clients must be assigned to a dealership.', 'warn'); return; }
 
   var sb = getSB(); if (!sb) return;
@@ -1461,13 +1469,16 @@ async function saveUser() {
   if (!session.data.session) { showToast('Not authenticated', 'error'); return; }
   var token = session.data.session.access_token;
 
-  showToast('Creating user... this may take a few seconds', 'info');
+  showToast(editId ? 'Updating user...' : 'Creating user...', 'info');
 
   try {
     var res = await fetch(SUPA_URL + '/functions/v1/manage-users', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-      body: JSON.stringify({ action: 'createUser', payload: { email: email, password: password, name: name, role: role, dealership_id: dealerId } })
+      body: JSON.stringify({
+        action: editId ? 'updateUser' : 'createUser',
+        payload: { userId: editId, email: email, password: password, name: name, role: role, dealership_id: dealerId }
+      })
     });
 
     var textRes = await res.text();
@@ -1481,15 +1492,24 @@ async function saveUser() {
     if (!res.ok) throw new Error(data.error || 'Server error');
 
     closeModalDirect();
-    showToast('User successfully created and authentication details generated.', 'success');
+    showToast(editId ? 'User successfully updated.' : 'User successfully created.', 'success');
 
     // Add locally to state
-    STATE.users.unshift({ id: data.user.id, name: name, email: email, role: role, dealershipId: dealerId, created_at: new Date().toISOString() });
+    if (editId) {
+      STATE.users = STATE.users.map(function (u) {
+        if (String(u.id) === String(editId)) {
+          return { ...u, name: name, role: role, dealershipId: dealerId };
+        }
+        return u;
+      });
+    } else {
+      STATE.users.unshift({ id: data.user.id, name: name, email: email, role: role, dealershipId: dealerId, created_at: new Date().toISOString() });
+    }
 
     var cp = STATE.currentPage;
     if (['all-users', 'admin'].includes(cp)) rerenderPage(cp);
   } catch (err) {
-    showToast('Error creating user: ' + err.message, 'error');
+    showToast((editId ? 'Error updating user: ' : 'Error creating user: ') + err.message, 'error');
   }
 }
 

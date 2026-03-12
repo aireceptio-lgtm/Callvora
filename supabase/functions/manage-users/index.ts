@@ -75,6 +75,33 @@ serve(async (req) => {
       return new Response(JSON.stringify({ success: true, user: newUser.user }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
+    if (action === 'updateUser') {
+      const { userId, email, password, name, role, dealership_id } = payload;
+      
+      // Step 7: Update Auth User
+      const authUpdates: any = { email: email };
+      if (password) {
+          authUpdates.password = password;
+      }
+      
+      const { data: updatedUser, error: updateError } = await supabaseAdmin.auth.admin.updateUserById(userId, authUpdates);
+      if (updateError) throw new Error('Auth Update Error: ' + updateError.message);
+
+      // Step 8: Update Public User
+      const { error: dbUpdateError } = await supabaseAdmin.from('users').update({
+        email: email,
+        name: name,
+        role: role,
+        dealership_id: dealership_id || null
+      }).eq('id', userId);
+      
+      if (dbUpdateError) {
+        throw new Error('Database Update Error: ' + dbUpdateError.message);
+      }
+
+      return new Response(JSON.stringify({ success: true, user: updatedUser.user }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }
+
     if (action === 'deleteUser') {
       const { userId } = payload;
       
