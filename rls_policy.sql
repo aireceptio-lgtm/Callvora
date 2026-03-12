@@ -94,8 +94,17 @@ CREATE TRIGGER tr_check_user_privilege_escalation
 CREATE POLICY "Admins have full access to vehicles" ON vehicles 
   FOR ALL USING (is_admin());
 
-CREATE POLICY "Clients have full access to their dealership vehicles" ON vehicles 
-  FOR ALL USING (dealership_id = get_user_dealership_id());
+CREATE POLICY "Clients can view and delete their dealership vehicles" ON vehicles 
+  FOR SELECT USING (dealership_id = get_user_dealership_id());
+
+CREATE POLICY "Clients can delete their dealership vehicles" ON vehicles 
+  FOR DELETE USING (dealership_id = get_user_dealership_id());
+
+CREATE POLICY "Clients can insert their dealership vehicles" ON vehicles 
+  FOR INSERT WITH CHECK (dealership_id = get_user_dealership_id());
+
+CREATE POLICY "Clients can update their dealership vehicles" ON vehicles 
+  FOR UPDATE USING (dealership_id = get_user_dealership_id()) WITH CHECK (dealership_id = get_user_dealership_id());
 
 -- ==============================================================================
 -- 6. Leads Policies
@@ -103,8 +112,17 @@ CREATE POLICY "Clients have full access to their dealership vehicles" ON vehicle
 CREATE POLICY "Admins have full access to leads" ON leads 
   FOR ALL USING (is_admin());
 
-CREATE POLICY "Clients have full access to their dealership leads" ON leads 
-  FOR ALL USING (dealership_id = get_user_dealership_id());
+CREATE POLICY "Clients can view their dealership leads" ON leads 
+  FOR SELECT USING (dealership_id = get_user_dealership_id());
+
+CREATE POLICY "Clients can delete their dealership leads" ON leads 
+  FOR DELETE USING (dealership_id = get_user_dealership_id());
+
+CREATE POLICY "Clients can insert their dealership leads" ON leads 
+  FOR INSERT WITH CHECK (dealership_id = get_user_dealership_id());
+
+CREATE POLICY "Clients can update their dealership leads" ON leads 
+  FOR UPDATE USING (dealership_id = get_user_dealership_id()) WITH CHECK (dealership_id = get_user_dealership_id());
 
 -- ==============================================================================
 -- 7. Calls Policies
@@ -112,8 +130,17 @@ CREATE POLICY "Clients have full access to their dealership leads" ON leads
 CREATE POLICY "Admins have full access to calls" ON calls 
   FOR ALL USING (is_admin());
 
-CREATE POLICY "Clients have full access to their dealership calls" ON calls 
-  FOR ALL USING (dealership_id = get_user_dealership_id());
+CREATE POLICY "Clients can view their dealership calls" ON calls 
+  FOR SELECT USING (dealership_id = get_user_dealership_id());
+
+CREATE POLICY "Clients can delete their dealership calls" ON calls 
+  FOR DELETE USING (dealership_id = get_user_dealership_id());
+
+CREATE POLICY "Clients can insert their dealership calls" ON calls 
+  FOR INSERT WITH CHECK (dealership_id = get_user_dealership_id());
+
+CREATE POLICY "Clients can update their dealership calls" ON calls 
+  FOR UPDATE USING (dealership_id = get_user_dealership_id()) WITH CHECK (dealership_id = get_user_dealership_id());
 
 -- ==============================================================================
 -- 8. Recharge History Policies
