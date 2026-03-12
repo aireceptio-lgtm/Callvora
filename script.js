@@ -1470,7 +1470,14 @@ async function saveUser() {
       body: JSON.stringify({ action: 'createUser', payload: { email: email, password: password, name: name, role: role, dealership_id: dealerId } })
     });
 
-    var data = await res.json();
+    var textRes = await res.text();
+    var data;
+    try {
+      data = JSON.parse(textRes);
+    } catch (e) {
+      throw new Error('Raw Server Error: ' + textRes);
+    }
+
     if (!res.ok) throw new Error(data.error || 'Server error');
 
     closeModalDirect();
