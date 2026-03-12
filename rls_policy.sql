@@ -23,7 +23,7 @@ AS $$
   );
 $$;
 
-CREATE OR REPLACE FUNCTION public.get_user_dealership_id()
+CREATE OR REPLACE FUNCTION public.get_user_dealership_id()::uuid
 RETURNS text
 LANGUAGE sql
 SECURITY DEFINER
@@ -41,7 +41,7 @@ CREATE POLICY "Admins have full access to dealerships" ON dealerships
 
 -- Clients can only view their own dealership
 CREATE POLICY "Clients can view their own dealership" ON dealerships 
-  FOR SELECT USING (id = get_user_dealership_id());
+  FOR SELECT USING (id = get_user_dealership_id()::uuid::uuid);
 
 -- ==============================================================================
 -- 4. Users Policies
@@ -51,7 +51,7 @@ CREATE POLICY "Admins have full access to users" ON users
 
 -- Users can view their own profile and other users in their dealership
 CREATE POLICY "Users can view users in same dealership" ON users 
-  FOR SELECT USING (dealership_id = get_user_dealership_id() OR id = auth.uid());
+  FOR SELECT USING (dealership_id = get_user_dealership_id()::uuid OR id = auth.uid());
 
 -- Users can only update their own profile (like changing name/password, if allowed via UI)
 CREATE POLICY "Users can update their own profile" ON users 
@@ -95,16 +95,16 @@ CREATE POLICY "Admins have full access to vehicles" ON vehicles
   FOR ALL USING (is_admin());
 
 CREATE POLICY "Clients can view and delete their dealership vehicles" ON vehicles 
-  FOR SELECT USING (dealership_id = get_user_dealership_id());
+  FOR SELECT USING (dealership_id = get_user_dealership_id()::uuid);
 
 CREATE POLICY "Clients can delete their dealership vehicles" ON vehicles 
-  FOR DELETE USING (dealership_id = get_user_dealership_id());
+  FOR DELETE USING (dealership_id = get_user_dealership_id()::uuid);
 
 CREATE POLICY "Clients can insert their dealership vehicles" ON vehicles 
-  FOR INSERT WITH CHECK (dealership_id = get_user_dealership_id());
+  FOR INSERT WITH CHECK (dealership_id = get_user_dealership_id()::uuid);
 
 CREATE POLICY "Clients can update their dealership vehicles" ON vehicles 
-  FOR UPDATE USING (dealership_id = get_user_dealership_id()) WITH CHECK (dealership_id = get_user_dealership_id());
+  FOR UPDATE USING (dealership_id = get_user_dealership_id()::uuid) WITH CHECK (dealership_id = get_user_dealership_id()::uuid);
 
 -- ==============================================================================
 -- 6. Leads Policies
@@ -113,16 +113,16 @@ CREATE POLICY "Admins have full access to leads" ON leads
   FOR ALL USING (is_admin());
 
 CREATE POLICY "Clients can view their dealership leads" ON leads 
-  FOR SELECT USING (dealership_id = get_user_dealership_id());
+  FOR SELECT USING (dealership_id = get_user_dealership_id()::uuid);
 
 CREATE POLICY "Clients can delete their dealership leads" ON leads 
-  FOR DELETE USING (dealership_id = get_user_dealership_id());
+  FOR DELETE USING (dealership_id = get_user_dealership_id()::uuid);
 
 CREATE POLICY "Clients can insert their dealership leads" ON leads 
-  FOR INSERT WITH CHECK (dealership_id = get_user_dealership_id());
+  FOR INSERT WITH CHECK (dealership_id = get_user_dealership_id()::uuid);
 
 CREATE POLICY "Clients can update their dealership leads" ON leads 
-  FOR UPDATE USING (dealership_id = get_user_dealership_id()) WITH CHECK (dealership_id = get_user_dealership_id());
+  FOR UPDATE USING (dealership_id = get_user_dealership_id()::uuid) WITH CHECK (dealership_id = get_user_dealership_id()::uuid);
 
 -- ==============================================================================
 -- 7. Calls Policies
@@ -131,16 +131,16 @@ CREATE POLICY "Admins have full access to calls" ON calls
   FOR ALL USING (is_admin());
 
 CREATE POLICY "Clients can view their dealership calls" ON calls 
-  FOR SELECT USING (dealership_id = get_user_dealership_id());
+  FOR SELECT USING (dealership_id = get_user_dealership_id()::uuid);
 
 CREATE POLICY "Clients can delete their dealership calls" ON calls 
-  FOR DELETE USING (dealership_id = get_user_dealership_id());
+  FOR DELETE USING (dealership_id = get_user_dealership_id()::uuid);
 
 CREATE POLICY "Clients can insert their dealership calls" ON calls 
-  FOR INSERT WITH CHECK (dealership_id = get_user_dealership_id());
+  FOR INSERT WITH CHECK (dealership_id = get_user_dealership_id()::uuid);
 
 CREATE POLICY "Clients can update their dealership calls" ON calls 
-  FOR UPDATE USING (dealership_id = get_user_dealership_id()) WITH CHECK (dealership_id = get_user_dealership_id());
+  FOR UPDATE USING (dealership_id = get_user_dealership_id()::uuid) WITH CHECK (dealership_id = get_user_dealership_id()::uuid);
 
 -- ==============================================================================
 -- 8. Recharge History Policies
@@ -149,4 +149,4 @@ CREATE POLICY "Admins have full access to recharge_history" ON recharge_history
   FOR ALL USING (is_admin());
 
 CREATE POLICY "Clients can view their own dealership recharge history" ON recharge_history 
-  FOR SELECT USING (dealership_id = get_user_dealership_id());
+  FOR SELECT USING (dealership_id = get_user_dealership_id()::uuid);
