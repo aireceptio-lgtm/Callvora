@@ -592,18 +592,19 @@ function renderAllUsers() {
     return ms && md;
   });
   var dOpts = '<option value="">All Dealerships</option>' + d.map(function (dd) { return '<option value="' + escH(dd.id) + '" ' + (fD === dd.id ? 'selected' : '') + '>' + escH(dd.name) + '</option>'; }).join('');
-  return '<div class="page-header"><div class="admin-badge-pill">' + icon('zap', 10) + ' ADMIN</div><div class="page-title font-display">All Users</div><div class="page-sub">' + u.length + ' users found</div></div>' +
+  return '<div class="page-header-row"><div><div class="admin-badge-pill">' + icon('zap', 10) + ' ADMIN</div><div class="page-title font-display">All Users</div><div class="page-sub">' + u.length + ' users found</div></div><button onclick="openUserModal()" class="btn btn-primary">' + icon('user_plus', 15) + ' Add User</button></div>' +
     '<div class="filters-bar"><div style="position:relative;flex:1;min-width:180px"><div style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-3);pointer-events:none">' + icon('search', 14) + '</div><input class="input" style="padding-left:38px" placeholder="Search name or email..." value="' + escH(STATE.adminUSearch) + '" oninput="STATE.adminUSearch=this.value;rerenderPage(\'all-users\')" maxlength="100"></div>' +
     '<select class="input" style="width:auto;min-width:160px" onchange="STATE.adminUDealer=this.value;rerenderPage(\'all-users\')">' + dOpts + '</select></div>' +
     '<div class="card" style="overflow:hidden"><div style="overflow-x:auto"><table><thead><tr>' +
-    '<th class="table-th table-th-num">#</th><th class="table-th">Name</th><th class="table-th">Email</th><th class="table-th">Role</th><th class="table-th">Dealership</th><th class="table-th">Created</th>' +
+    '<th class="table-th table-th-num">#</th><th class="table-th">Name</th><th class="table-th">Email</th><th class="table-th">Role</th><th class="table-th">Dealership</th><th class="table-th">Created</th><th class="table-th">Actions</th>' +
     '</tr></thead><tbody>' +
-    (u.length === 0 ? '<tr><td colspan="6"><div class="empty-state">' + icon('shield', 28) + '<br>No users found</div></td></tr>' :
+    (u.length === 0 ? '<tr><td colspan="7"><div class="empty-state">' + icon('shield', 28) + '<br>No users found</div></td></tr>' :
       u.map(function (uu, i) {
         var dealer = d.find(function (x) { return x.id === uu.dealershipId; }); return '<tr>' +
           '<td class="table-td-num">' + (i + 1) + '</td><td class="table-td"><span style="color:var(--text-1);font-weight:500">' + escH(uu.name) + '</span></td><td class="table-td" style="color:var(--text-3)">' + escH(uu.email) + '</td>' +
-          '<td class="table-td"><span class="badge ' + roleBadge(uu.role) + '">' + escH(uu.role) + '</span></td><td class="table-td" style="font-size:12px;color:var(--text-3)">' + escH(dealer ? dealer.name : '–') + '</td>' +
-          '<td class="table-td" style="font-size:11px;color:var(--text-3)">' + fmtDateShort(uu.created_at) + '</td></tr>';
+          '<td class="table-th"><span class="badge ' + roleBadge(uu.role) + '">' + escH(uu.role) + '</span></td><td class="table-td" style="font-size:12px;color:var(--text-3)">' + escH(dealer ? dealer.name : '–') + '</td>' +
+          '<td class="table-td" style="font-size:11px;color:var(--text-3)">' + fmtDateShort(uu.created_at) + '</td>' +
+          '<td class="table-td">' + (STATE.currentUser && STATE.currentUser.id === uu.id ? '<span style="color:var(--text-3);font-size:12px">Current</span>' : '<button onclick="promptDelete(\\\'user\\\', \\\'' + escQ(uu.id) + '\\\')" class="btn btn-ghost btn-sm" style="color:var(--danger)">' + icon('trash', 14) + '</button>') + '</td></tr>';
       }).join('')) +
     '</tbody></table></div></div>';
 }
@@ -1028,7 +1029,7 @@ function showMetricDetail(type) {
 window._pendingDelete = null;
 function promptDelete(type, id) {
   window._pendingDelete = { type: type, id: id };
-  var itemName = type === 'vehicle' ? 'this vehicle' : type === 'lead' ? 'this lead' : 'this dealership and all its data';
+  var itemName = type === 'vehicle' ? 'this vehicle' : type === 'lead' ? 'this lead' : type === 'user' ? 'this user' : 'this dealership and all its data';
   openModal(
     '<div class="modal-header-bar"><h2>Confirm Deletion</h2><button class="modal-close-btn" onclick="closeModalDirect()">✕</button></div>' +
     '<div class="modal-body-inner">' +
@@ -1046,6 +1047,7 @@ async function executeDelete() {
   if (pd.type === 'vehicle') await deleteVehicle(pd.id);
   if (pd.type === 'lead') await deleteLead(pd.id);
   if (pd.type === 'dealership') await deleteDealership(pd.id);
+  if (pd.type === 'user') await deleteUser(pd.id);
 }
 
 /* ── VEHICLE CRUD ─────────────────────────────────────────── */
@@ -1416,6 +1418,98 @@ async function deleteDealership(id) {
   if (r.error) { showToast('Error: ' + r.error.message, 'error'); return; }
   showToast('Dealership deleted.', 'error');
   navigate('dealerships');
+}
+
+/* ── USER CRUD (ADMIN ONLY) ───────────────────────────────── */
+function openUserModal() {
+  var cu = STATE.currentUser;
+  if (!cu || cu.role !== 'ADMIN') { showToast('Unauthorized', 'error'); return; }
+
+  var dealerSelectHtml = '<div class="form-group"><label>Assign to Dealership</label><select id="uDealer" class="form-input"><option value="">No Dealership (Admin)</option>' +
+    STATE.dealerships.map(function (d) { return '<option value="' + escH(d.id) + '">' + escH(d.name) + '</option>'; }).join('') +
+    '</select></div>';
+
+  openModal(
+    '<div class="modal-header-bar"><h2>Add New User</h2><button class="modal-close-btn" onclick="closeModalDirect()">✕</button></div>' +
+    '<div class="modal-body-inner">' +
+    '<div class="form-grid">' +
+    '<div class="form-group"><label>Name <span class="req">*</span></label><input id="uName" class="form-input" maxlength="100" placeholder="e.g. Jane Doe"></div>' +
+    '<div class="form-group"><label>Email <span class="req">*</span></label><input id="uEmail" class="form-input" type="email" maxlength="120" placeholder="user@example.com"></div>' +
+    '<div class="form-group"><label>Password <span class="req">*</span></label><input id="uPass" class="form-input" type="password" maxlength="60" placeholder="Min 6 characters"></div>' +
+    '<div class="form-group"><label>Role <span class="req">*</span></label><select id="uRole" class="form-input" onchange="document.getElementById(\\\'uDealerWrapper\\\').style.display = this.value === \\\'CLIENT\\\' ? \\\'block\\\' : \\\'none\\\'"><option value="CLIENT" selected>Client</option><option value="ADMIN">Admin</option></select></div>' +
+    '</div>' +
+    '<div id="uDealerWrapper" style="display:block; margin-top: 16px;">' + dealerSelectHtml + '</div>' +
+    '<div class="modal-actions" style="margin-top:24px"><button class="btn btn-secondary" onclick="closeModalDirect()">Cancel</button><button class="btn btn-primary" onclick="saveUser()">Create User</button></div>' +
+    '</div>'
+  );
+}
+
+async function saveUser() {
+  var name = sanitizeInput(document.getElementById('uName').value.trim());
+  var email = sanitizeInput(document.getElementById('uEmail').value.trim());
+  var password = document.getElementById('uPass').value; // Don't strictly sanitize passwords to allow symbols
+  var role = document.getElementById('uRole').value;
+  var dealerSelect = document.getElementById('uDealer');
+  var dealerId = role === 'CLIENT' && dealerSelect ? dealerSelect.value : null;
+
+  if (!name || !email || !password) { showToast('Name, Email, and Password are required.', 'warn'); return; }
+  if (password.length < 6) { showToast('Password must be at least 6 characters long.', 'warn'); return; }
+  if (role === 'CLIENT' && !dealerId) { showToast('Clients must be assigned to a dealership.', 'warn'); return; }
+
+  var sb = getSB(); if (!sb) return;
+  var session = await sb.auth.getSession();
+  if (!session.data.session) { showToast('Not authenticated', 'error'); return; }
+  var token = session.data.session.access_token;
+
+  showToast('Creating user... this may take a few seconds', 'info');
+
+  try {
+    var res = await fetch(SUPA_URL + '/functions/v1/manage-users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ action: 'createUser', payload: { email: email, password: password, name: name, role: role, dealership_id: dealerId } })
+    });
+
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Server error');
+
+    closeModalDirect();
+    showToast('User successfully created and authentication details generated.', 'success');
+
+    // Add locally to state
+    STATE.users.unshift({ id: data.user.id, name: name, email: email, role: role, dealershipId: dealerId, created_at: new Date().toISOString() });
+
+    var cp = STATE.currentPage;
+    if (['all-users', 'admin'].includes(cp)) rerenderPage(cp);
+  } catch (err) {
+    showToast('Error creating user: ' + err.message, 'error');
+  }
+}
+
+async function deleteUser(id) {
+  var sb = getSB(); if (!sb) return;
+  var session = await sb.auth.getSession();
+  if (!session.data.session) return;
+  var token = session.data.session.access_token;
+
+  try {
+    var res = await fetch(SUPA_URL + '/functions/v1/manage-users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ action: 'deleteUser', payload: { userId: id } })
+    });
+
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Server error');
+
+    showToast('User deleted from the platform.', 'success');
+    STATE.users = STATE.users.filter(function (u) { return String(u.id) !== String(id); });
+
+    var cp = STATE.currentPage;
+    if (['all-users', 'admin'].includes(cp)) rerenderPage(cp);
+  } catch (err) {
+    showToast('Error deleting user: ' + err.message, 'error');
+  }
 }
 
 /* ── AUTH PERSISTENCE (STAYS LOGGED IN ON REFRESH) ────────────── */
