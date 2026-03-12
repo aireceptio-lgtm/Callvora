@@ -41,7 +41,7 @@ CREATE POLICY "Admins have full access to dealerships" ON dealerships
 
 -- Clients can only view their own dealership
 CREATE POLICY "Clients can view their own dealership" ON dealerships 
-  FOR SELECT USING (id = get_user_dealership_id() OR get_user_dealership_id() IS NULL);
+  FOR SELECT USING (id = get_user_dealership_id());
 
 -- ==============================================================================
 -- 4. Users Policies
@@ -56,6 +56,37 @@ CREATE POLICY "Users can view users in same dealership" ON users
 -- Users can only update their own profile (like changing name/password, if allowed via UI)
 CREATE POLICY "Users can update their own profile" ON users 
   FOR UPDATE USING (id = auth.uid());
+
+-- Prevent unauthorized privilege escalation
+CREATE OR REPLACE FUNCTION public.check_user_privilege_escalation()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  -- If the user is an admin, they can change anything
+  IF public.is_admin() THEN
+    RETURN NEW;
+  END IF;
+
+  -- If not an admin, they cannot change their role or dealership_id
+  IF NEW.role IS DISTINCT FROM OLD.role THEN
+    RAISE EXCEPTION 'Not authorized to change user role';
+  END IF;
+  
+  IF NEW.dealership_id IS DISTINCT FROM OLD.dealership_id THEN
+    RAISE EXCEPTION 'Not authorized to change dealership_id';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS tr_check_user_privilege_escalation ON users;
+CREATE TRIGGER tr_check_user_privilege_escalation
+  BEFORE UPDATE ON users
+  FOR EACH ROW
+  EXECUTE FUNCTION check_user_privilege_escalation();
 
 -- ==============================================================================
 -- 5. Vehicles Policies
