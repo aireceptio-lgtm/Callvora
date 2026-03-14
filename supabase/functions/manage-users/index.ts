@@ -87,13 +87,13 @@ Deno.serve(async (req) => {
         if (passErr) console.warn("Password sync warning:", passErr.message);
       }
 
-      // Update Public DB
-      const { error: dbUpdateErr } = await supabaseAdmin.from("users").update({
-        email: email,
-        name: name,
-        role: role,
-        dealership_id: dealership_id || null,
-      }).eq("id", userId);
+      // Update Public DB via SECURITY DEFINER RPC (bypasses RLS completely)
+      const { error: dbUpdateErr } = await supabaseAdmin.rpc("admin_update_user", {
+        p_user_id: userId,
+        p_name: name,
+        p_role: role,
+        p_dealership_id: dealership_id || null,
+      });
 
       if (dbUpdateErr) throw new Error("Database Update Failed: " + dbUpdateErr.message);
 
