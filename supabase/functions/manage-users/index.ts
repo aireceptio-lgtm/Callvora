@@ -19,33 +19,23 @@ Deno.serve(async (req) => {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
-    // Verify the calling user's token
+    // Verify the calling user's token directly using Supabase Auth
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) throw new Error("Missing Authorization header.");
     const token = authHeader.replace("Bearer ", "").trim();
 
-    // The Supabase Auth client often fails with "Invalid JWT" inside Deno Edge Functions
-    // when trying to parse tokens meant for the front-end.
-    // Since we ALREADY have the Service Role Key (bypasses RLS), we will manually
-    // extract the user's email from the JWT payload and verify they are an admin.
+    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
     
-    // Parse JWT Payload manually (Header.Payload.Signature)
-    const tokenParts = token.split('.');
-    if (tokenParts.length !== 3) throw new Error("Malformed JWT token format.");
-    
-    // Decode base64 payload
-    const payloadBuffer = Uint8Array.from(atob(tokenParts[1]), c => c.charCodeAt(0));
-    const tokenPayload = JSON.parse(new TextDecoder().decode(payloadBuffer));
-    
-    const userEmail = tokenPayload.email || tokenPayload.user_metadata?.email;
-    if (!userEmail) throw new Error("Could not extract email from JWT payload.");
+    if (authError || !user) {
+      throw new Error(`Session Invalid: ${authError?.message || 'User not found'}`);
+    }
 
-    // Verify caller is ADMIN directly from the database using their decoded email
+    // Verify caller is ADMIN directly from the database
     const { data: adminCheck, error: adminErr } = await supabaseAdmin
-      .from("users").select("role").eq("email", userEmail).single();
+      .from("users").select("role").eq("email", user.email).single();
       
     if (adminErr || !adminCheck || adminCheck.role !== "ADMIN") {
-      throw new Error(`Forbidden: Access denied. Checked email: ${userEmail}`);
+      throw new Error(`Forbidden: Access denied for ${user.email}`);
     }
 
     const { action, payload } = await req.json();
