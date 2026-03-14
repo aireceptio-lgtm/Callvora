@@ -101,7 +101,12 @@ async function handleLogin() {
     _loginAttempts = 0;
     var uid = authRes.data.user.id, role = 'CLIENT', name = emailRaw, dealershipId = null;
     var uRes = await client.from('users').select('*').eq('id', uid).maybeSingle();
-    if (!uRes.error && uRes.data) { role = uRes.data.role || 'CLIENT'; name = uRes.data.name || emailRaw; dealershipId = uRes.data.dealership_id || null; }
+    
+    if (!uRes.error && uRes.data) {
+      role = uRes.data.role || 'CLIENT'; 
+      name = uRes.data.name || emailRaw; 
+      dealershipId = uRes.data.dealership_id || null; 
+    }
     STATE.currentUser = { id: uid, email: emailRaw, role: role, name: name, dealershipId: dealershipId };
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('app').style.display = 'flex';
@@ -160,8 +165,21 @@ function navigate(pageId) {
   document.querySelectorAll('.page').forEach(function (p) { p.classList.remove('active'); });
   STATE.currentPage = pageId; STATE.expandedRow = null;
   var page = document.getElementById('page-' + pageId); if (!page) return;
-  if (_renders[pageId]) { page.innerHTML = _renders[pageId](); page.classList.add('active'); }
-  setTimeout(animateBars, 50);
+  if (_renders[pageId]) {
+    var result = _renders[pageId]();
+    // NEW: Check if the function is async (returns a promise)
+    if (result instanceof Promise) {
+      result.then(function (html) {
+        if (html) page.innerHTML = html;
+        setTimeout(animateBars, 50);
+      });
+    } else {
+      // Normal synchronous pages
+      page.innerHTML = result;
+      setTimeout(animateBars, 50);
+    }
+    page.classList.add('active');
+  } setTimeout(animateBars, 50);
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -1081,6 +1099,10 @@ async function saveVehicle(id) {
 
   if (selectedDealerId) { payload.dealership_id = selectedDealerId; }
   else if (!isAdmin && cu && cu.dealershipId) { payload.dealership_id = cu.dealershipId; }
+  else if (!isAdmin && (!cu || !cu.dealershipId)) { 
+    showToast('CRITICAL: Your user profile is missing a Dealership ID in the database. Contact an admin.', 'error'); 
+    return; 
+  }
 
   var sb = getSB(); if (!sb) return;
   try {
@@ -1197,6 +1219,10 @@ async function saveLead(id, dealershipId) {
   if (selectedDealerId) { payload.dealership_id = selectedDealerId; }
   else if (dealershipId) { payload.dealership_id = dealershipId; }
   else if (cu && cu.dealershipId) { payload.dealership_id = cu.dealershipId; }
+  else if (!isAdmin && (!cu || !cu.dealershipId)) { 
+    showToast('CRITICAL: Your user profile is missing a Dealership ID in the database. Contact an admin.', 'error'); 
+    return; 
+  }
 
   var sb = getSB(); if (!sb) return;
   try {
@@ -1486,8 +1512,7 @@ window.addEventListener('DOMContentLoaded', async function () {
     var email = session.user.email;
 
     // Fetch the user's profile details
-    var uRes = await sb.from('users').select('*').eq('id', uid).maybeSingle();
-    var role = 'CLIENT', name = email, dealershipId = null;
+    var uRes = await sb.from('users').select('*').eq('id', uid).maybeSingle(); var role = 'CLIENT', name = email, dealershipId = null;
 
     if (!uRes.error && uRes.data) {
       role = uRes.data.role || 'CLIENT';
