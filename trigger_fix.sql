@@ -1,34 +1,46 @@
--- FINAL FIX: Run this in Supabase SQL Editor
--- Creates a SECURITY DEFINER function that ALWAYS bypasses RLS
--- The Edge Function will call this function via RPC instead of updating the table directly.
+-- ================================================================
+-- DEFINITIVE FIX: Run ALL of this in Supabase SQL Editor at once
+-- Creates SECURITY DEFINER RPC functions for user Insert/Update/Delete
+-- These run as postgres (owner), bypassing ALL RLS & triggers
+-- ================================================================
 
--- Step 1: Drop the old blocking trigger (if still exists)
+-- 1. Drop any old trigger that might still be interfering
 DROP TRIGGER IF EXISTS tr_check_user_privilege_escalation ON public.users;
 DROP FUNCTION IF EXISTS public.check_user_privilege_escalation();
 
--- Step 2: Create a secure RPC function that admins can call to update a user
--- SECURITY DEFINER means it runs as the owner (postgres), bypassing ALL RLS
-CREATE OR REPLACE FUNCTION public.admin_update_user(
-    p_user_id TEXT,
-    p_name TEXT,
-    p_role TEXT,
-    p_dealership_id TEXT
+-- 2. Create function for INSERTING a new user
+DROP FUNCTION IF EXISTS public.admin_insert_user(TEXT, TEXT, TEXT, TEXT, TEXT);
+CREATE OR REPLACE FUNCTION public.admin_insert_user(
+    p_id TEXT, p_email TEXT, p_name TEXT, p_role TEXT, p_dealership_id TEXT
 )
-RETURNS void
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+    INSERT INTO public.users (id, email, name, role, dealership_id)
+    VALUES (p_id::uuid, p_email, p_name, p_role, p_dealership_id);
+END;
+$$;
+GRANT EXECUTE ON FUNCTION public.admin_insert_user(TEXT, TEXT, TEXT, TEXT, TEXT) TO service_role, authenticated, anon;
+
+-- 3. Create function for UPDATING a user
+DROP FUNCTION IF EXISTS public.admin_update_user(TEXT, TEXT, TEXT, TEXT, TEXT);
+CREATE OR REPLACE FUNCTION public.admin_update_user(
+    p_user_id TEXT, p_email TEXT, p_name TEXT, p_role TEXT, p_dealership_id TEXT
+)
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 BEGIN
     UPDATE public.users
-    SET
-        name = p_name,
-        role = p_role,
-        dealership_id = p_dealership_id
+    SET email = p_email, name = p_name, role = p_role, dealership_id = p_dealership_id
     WHERE id::text = p_user_id;
 END;
 $$;
+GRANT EXECUTE ON FUNCTION public.admin_update_user(TEXT, TEXT, TEXT, TEXT, TEXT) TO service_role, authenticated, anon;
 
--- Step 3: Grant execute permission to the service_role and authenticated users
-GRANT EXECUTE ON FUNCTION public.admin_update_user(TEXT, TEXT, TEXT, TEXT) TO service_role;
-GRANT EXECUTE ON FUNCTION public.admin_update_user(TEXT, TEXT, TEXT, TEXT) TO authenticated;
+-- 4. Create function for DELETING a user
+DROP FUNCTION IF EXISTS public.admin_delete_user(TEXT);
+CREATE OR REPLACE FUNCTION public.admin_delete_user(p_user_id TEXT)
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+    DELETE FROM public.users WHERE id::text = p_user_id;
+END;
+$$;
+GRANT EXECUTE ON FUNCTION public.admin_delete_user(TEXT) TO service_role, authenticated, anon;

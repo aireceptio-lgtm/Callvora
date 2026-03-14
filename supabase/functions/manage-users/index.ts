@@ -6,7 +6,6 @@ const corsHeaders = {
 };
 
 Deno.serve(async (req) => {
-  // 1. Handle CORS Preflight
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -14,65 +13,57 @@ Deno.serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!supabaseUrl || !supabaseKey) throw new Error("Missing server configuration.");
 
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error("Missing Server Configuration (URL or Key).");
-    }
-
-    // 2. The Service Role client acts as the ultimate system Admin, bypassing RLS
     const supabaseAdmin = createClient(supabaseUrl, supabaseKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
-    // 3. Parse Request Payload
-    const body = await req.json();
-    const { action, payload } = body;
-
-    // 4. Securely Verify the user requesting the action is actually an Admin
+    // Verify the calling user's token
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) throw new Error("Missing Authorization header.");
     const token = authHeader.replace("Bearer ", "").trim();
 
     const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
-    if (authError || !user) throw new Error("Invalid or Expired Auth Token.");
+    if (authError || !user) throw new Error("Invalid or expired session token.");
 
-    const { data: adminData, error: adminErr } = await supabaseAdmin
-      .from("users")
-      .select("role")
-      .eq("email", user.email)
-      .single();
-
-    if (adminErr || !adminData || adminData.role !== "ADMIN") {
-      throw new Error("Forbidden: Only Admins can execute this action.");
+    // Verify caller is ADMIN (by email to avoid ID mismatch issues)
+    const { data: adminCheck, error: adminErr } = await supabaseAdmin
+      .from("users").select("role").eq("email", user.email).single();
+    if (adminErr || !adminCheck || adminCheck.role !== "ADMIN") {
+      throw new Error("Forbidden: Only Admins can perform this action.");
     }
+
+    const { action, payload } = await req.json();
 
     // ==========================================
     // ACTION: CREATE USER
     // ==========================================
     if (action === "createUser") {
       const { email, password, name, role, dealership_id } = payload;
-      
+
+      // Step A: Create in Supabase Auth
       const { data: authData, error: authCreateErr } = await supabaseAdmin.auth.admin.createUser({
-        email: email,
-        password: password,
-        email_confirm: true,
+        email, password, email_confirm: true,
       });
-      if (authCreateErr) throw new Error("Auth Creation Failed: " + authCreateErr.message);
+      if (authCreateErr) throw new Error("Auth creation failed: " + authCreateErr.message);
 
-      const { error: dbInsertErr } = await supabaseAdmin.from("users").insert({
-        id: authData.user.id,
-        email: email,
-        name: name,
-        role: role,
-        dealership_id: dealership_id || null,
+      // Step B: Insert in public.users via SECURITY DEFINER RPC (bypasses all RLS)
+      const { error: rpcErr } = await supabaseAdmin.rpc("admin_insert_user", {
+        p_id: authData.user.id,
+        p_email: email,
+        p_name: name,
+        p_role: role,
+        p_dealership_id: dealership_id || null,
       });
-
-      if (dbInsertErr) {
-        await supabaseAdmin.auth.admin.deleteUser(authData.user.id); // Rollback if DB fails
-        throw new Error("Database Insertion Failed: " + dbInsertErr.message);
+      if (rpcErr) {
+        await supabaseAdmin.auth.admin.deleteUser(authData.user.id); // Rollback
+        throw new Error("DB insert failed: " + rpcErr.message);
       }
 
-      return new Response(JSON.stringify({ success: true, user: authData.user }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ success: true, user: authData.user }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // ==========================================
@@ -81,23 +72,24 @@ Deno.serve(async (req) => {
     if (action === "updateUser") {
       const { userId, email, password, name, role, dealership_id } = payload;
 
-      // Update Auth Password (only if a new one was typed in)
+      // Update password in Auth (if provided)
       if (password && password.trim() !== "") {
-        const { error: passErr } = await supabaseAdmin.auth.admin.updateUserById(userId, { password: password });
-        if (passErr) console.warn("Password sync warning:", passErr.message);
+        await supabaseAdmin.auth.admin.updateUserById(userId, { password });
       }
 
-      // Update Public DB via SECURITY DEFINER RPC (bypasses RLS completely)
-      const { error: dbUpdateErr } = await supabaseAdmin.rpc("admin_update_user", {
+      // Update profile via SECURITY DEFINER RPC (bypasses all RLS)
+      const { error: rpcErr } = await supabaseAdmin.rpc("admin_update_user", {
         p_user_id: userId,
+        p_email: email,
         p_name: name,
         p_role: role,
         p_dealership_id: dealership_id || null,
       });
+      if (rpcErr) throw new Error("DB update failed: " + rpcErr.message);
 
-      if (dbUpdateErr) throw new Error("Database Update Failed: " + dbUpdateErr.message);
-
-      return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // ==========================================
@@ -105,22 +97,28 @@ Deno.serve(async (req) => {
     // ==========================================
     if (action === "deleteUser") {
       const { userId } = payload;
-      
-      await supabaseAdmin.auth.admin.deleteUser(userId); // Delete from Auth layer
-      
-      const { error: dbDelErr } = await supabaseAdmin.from("users").delete().eq("id", userId);
-      if (dbDelErr) throw new Error("Database Delete Failed: " + dbDelErr.message);
 
-      return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      // Delete from Auth
+      await supabaseAdmin.auth.admin.deleteUser(userId);
+
+      // Delete from public.users via SECURITY DEFINER RPC (bypasses all RLS)
+      const { error: rpcErr } = await supabaseAdmin.rpc("admin_delete_user", {
+        p_user_id: userId,
+      });
+      if (rpcErr) throw new Error("DB delete failed: " + rpcErr.message);
+
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    throw new Error("Unknown action requested.");
+    throw new Error("Unknown action: " + action);
 
   } catch (error: any) {
-    console.error("Edge Function Error:", error.message);
-    return new Response(JSON.stringify({ error: error.message }), { 
-      status: 400, 
-      headers: { ...corsHeaders, "Content-Type": "application/json" } 
+    console.error("manage-users error:", error.message);
+    return new Response(JSON.stringify({ error: error.message || "Unknown error" }), {
+      status: 400,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });
