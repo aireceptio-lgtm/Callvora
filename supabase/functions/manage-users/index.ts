@@ -1,22 +1,23 @@
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { createClient } from 'npm:@supabase/supabase-js@2'
 
-// Standard CORS headers to allow your CRM to talk to this function
+// Standard CORS headers
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   // 1. Handle CORS Preflight request immediately
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
 
   try {
+    console.log("Edge function started successfully.");
+    
     // 2. Initialize Environment Variables
-    const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
     if (!supabaseUrl || !supabaseServiceKey) {
       throw new Error('Server misconfiguration: Missing Supabase URL or Service Key');
@@ -25,11 +26,9 @@ serve(async (req) => {
     // 3. Extract and Validate the Auth Token
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) throw new Error('Missing Authorization header');
-    
-    // Strip "Bearer " from the header to get the raw JWT token
     const token = authHeader.replace('Bearer ', '').trim();
 
-    // 4. Create a single Admin Client
+    // 4. Create Admin Client
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
     
     // 5. Verify User Session explicitly using the token
@@ -61,44 +60,10 @@ serve(async (req) => {
     }
 
     // ==========================================
-    // ACTION: CREATE USER
-    // ==========================================
-    if (action === 'createUser') {
-      const { email, password, name, role, dealership_id } = payload;
-      
-      // Step A: Create Auth User
-      const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
-        email: email,
-        password: password,
-        email_confirm: true
-      });
-      if (createError) throw new Error('Auth Creation Error: ' + createError.message);
-      if (!newUser || !newUser.user) throw new Error('Failed to create user in Auth layer.');
-
-      // Step B: Insert Public User
-      const { error: insertError } = await supabaseAdmin.from('users').insert({
-        id: newUser.user.id,
-        email: email,
-        name: name,
-        role: role,
-        dealership_id: dealership_id || null
-      });
-      
-      if (insertError) {
-        // Rollback Auth creation if database insert fails
-        await supabaseAdmin.auth.admin.deleteUser(newUser.user.id);
-        throw new Error('Database Insertion Error: ' + insertError.message);
-      }
-
-      return new Response(JSON.stringify({ success: true, user: newUser.user }), { 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      });
-    }
-
-    // ==========================================
     // ACTION: UPDATE USER
     // ==========================================
     if (action === 'updateUser') {
+      console.log(`Updating user: ${payload.email}`);
       const { userId, email, password, name, role, dealership_id } = payload;
       
       // Step A: Update Auth User
@@ -128,34 +93,41 @@ serve(async (req) => {
     }
 
     // ==========================================
+    // ACTION: CREATE USER
+    // ==========================================
+    if (action === 'createUser') {
+      const { email, password, name, role, dealership_id } = payload;
+      const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
+        email: email, password: password, email_confirm: true
+      });
+      if (createError) throw new Error('Auth Creation Error: ' + createError.message);
+      
+      const { error: insertError } = await supabaseAdmin.from('users').insert({
+        id: newUser.user.id, email: email, name: name, role: role, dealership_id: dealership_id || null
+      });
+      
+      if (insertError) {
+        await supabaseAdmin.auth.admin.deleteUser(newUser.user.id);
+        throw new Error('Database Insertion Error: ' + insertError.message);
+      }
+      return new Response(JSON.stringify({ success: true, user: newUser.user }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    // ==========================================
     // ACTION: DELETE USER
     // ==========================================
     if (action === 'deleteUser') {
       const { userId } = payload;
-      
-      // Step A: Delete from Supabase Auth
       const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(userId);
       if (deleteError) throw new Error('Auth Deletion Error: ' + deleteError.message);
-
-      // Step B: Delete from public users explicitly 
       await supabaseAdmin.from('users').delete().eq('id', userId);
-
-      return new Response(JSON.stringify({ success: true }), { 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      });
+      return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    // If no matching action is found
-    return new Response(JSON.stringify({ error: 'Unknown action requested' }), { 
-        status: 400, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-    });
+    return new Response(JSON.stringify({ error: 'Unknown action requested' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
   } catch (err: any) {
-    console.error('manage-users error:', err);
-    return new Response(JSON.stringify({ error: err.message || 'Unknown server error' }), { 
-        status: 400, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-    });
+    console.error('Edge Function Error:', err.message);
+    return new Response(JSON.stringify({ error: err.message || 'Unknown server error' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
 })
