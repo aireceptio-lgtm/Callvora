@@ -24,10 +24,20 @@ Deno.serve(async (req) => {
     if (!authHeader) throw new Error("Missing Authorization header.");
     const token = authHeader.replace("Bearer ", "").trim();
 
-    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
-    if (authError || !user) throw new Error("Invalid or expired session token.");
+    // To validate a user token, we MUST create a temporary standard client using the ANON key + user token.
+    // The Service Role admin client cannot reliably validate standard user sessions.
+    const supabaseAnonUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
+    if (!supabaseAnonUrl || !supabaseAnonKey) throw new Error("Missing ANON server configuration.");
 
-    // Verify caller is ADMIN (by email to avoid ID mismatch issues)
+    const supabaseUserClient = createClient(supabaseAnonUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: `Bearer ${token}` } }
+    });
+
+    const { data: { user }, error: authError } = await supabaseUserClient.auth.getUser();
+    if (authError || !user) throw new Error(`Invalid Session Token: ${authError?.message || 'No user found'}`);
+
+    // Verify caller is ADMIN (by email to avoid ID mismatch issues) using the Admin client
     const { data: adminCheck, error: adminErr } = await supabaseAdmin
       .from("users").select("role").eq("email", user.email).single();
     if (adminErr || !adminCheck || adminCheck.role !== "ADMIN") {
