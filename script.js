@@ -100,15 +100,15 @@ async function handleLogin() {
     if (authRes.error) { _loginAttempts++; if (_loginAttempts >= 5) { _loginLockUntil = Date.now() + 60000; _loginAttempts = 0; showLoginError('Too many failed attempts. Locked for 60 seconds.'); } else { showLoginError(authRes.error.message); } resetLoginBtn(); return; }
     _loginAttempts = 0;
     var uid = authRes.data.user.id, role = 'CLIENT', name = emailRaw, dealershipId = null;
-var uRes = await client.from('users').select('*').eq('email', emailRaw).maybeSingle();    
+    var uRes = await client.from('users').select('*').eq('email', emailRaw).maybeSingle();
     if (uRes.error) {
       console.error('CRITICAL: RLS or Database error fetching user role:', uRes.error);
     }
-    
+
     if (!uRes.error && uRes.data) {
-      role = String(uRes.data.role || 'CLIENT').toUpperCase(); 
-      name = uRes.data.name || emailRaw; 
-      dealershipId = uRes.data.dealership_id || null; 
+      role = String(uRes.data.role || 'CLIENT').toUpperCase();
+      name = uRes.data.name || emailRaw;
+      dealershipId = uRes.data.dealership_id || null;
     }
     STATE.currentUser = { id: uid, email: emailRaw, role: role, name: name, dealershipId: dealershipId };
     document.getElementById('login-screen').style.display = 'none';
@@ -459,7 +459,7 @@ function renderAllVehicles() {
   });
   var dOpts = '<option value="">All Dealerships</option>' + d.map(function (dd) { return '<option value="' + escH(dd.id) + '" ' + (fD === dd.id ? 'selected' : '') + '>' + escH(dd.name) + '</option>'; }).join('');
   return '<div class="page-header-row"><div><div class="admin-badge-pill">' + icon('zap', 10) + ' ADMIN</div><div class="page-title font-display">All Vehicles</div><div class="page-sub">' + v.length + ' vehicles found</div></div><button onclick="openVehicleModal()" class="btn btn-primary">' + icon('plus', 15) + ' Add Vehicle</button></div>' +
-    '<div class="filters-bar"><div style="position:relative;flex:1;min-width:180px"><div style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-3);pointer-events:none">' + icon('search', 14) + '</div><input class="input" style="padding-left:38px" placeholder="Search make, model, year..." value="' + escH(STATE.adminVSearch) + '" oninput="STATE.adminVSearch=this.value;rerenderPage(\'all-vehicles\')" maxlength="100"></div>' +
+    '<div class="filters-bar"><div style="position:relative;flex:1;min-width:180px"><div style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-3);pointer-events:none">' + icon('search', 14) + '</div><input class="input" name="search" aria-label="Search" style="padding-left:38px" placeholder="Search make, model, year..." value="' + escH(STATE.adminVSearch) + '" oninput="STATE.adminVSearch=this.value;rerenderPage(\'all-vehicles\')" maxlength="100"></div>' +
     '<select class="input" style="width:auto;min-width:180px" onchange="STATE.adminVDealer=this.value;rerenderPage(\'all-vehicles\')">' + dOpts + '</select></div>' +
     '<div class="card" style="overflow:hidden"><div style="overflow-x:auto"><table><thead><tr>' +
     '<th class="table-th table-th-num">#</th><th class="table-th">Dealership</th><th class="table-th">Make &amp; Model</th><th class="table-th">Year</th><th class="table-th">Fuel</th><th class="table-th">Transmission</th><th class="table-th">Mileage</th><th class="table-th">Price</th><th class="table-th">Status</th><th class="table-th"></th>' +
@@ -1102,9 +1102,9 @@ async function saveVehicle(id) {
 
   if (selectedDealerId) { payload.dealership_id = selectedDealerId; }
   else if (!isAdmin && cu && cu.dealershipId) { payload.dealership_id = cu.dealershipId; }
-  else if (!isAdmin && (!cu || !cu.dealershipId)) { 
-    showToast('CRITICAL: Your user profile is missing a Dealership ID in the database. Contact an admin.', 'error'); 
-    return; 
+  else if (!isAdmin && (!cu || !cu.dealershipId)) {
+    showToast('CRITICAL: Your user profile is missing a Dealership ID in the database. Contact an admin.', 'error');
+    return;
   }
 
   var sb = getSB(); if (!sb) return;
@@ -1222,9 +1222,9 @@ async function saveLead(id, dealershipId) {
   if (selectedDealerId) { payload.dealership_id = selectedDealerId; }
   else if (dealershipId) { payload.dealership_id = dealershipId; }
   else if (cu && cu.dealershipId) { payload.dealership_id = cu.dealershipId; }
-  else if (!isAdmin && (!cu || !cu.dealershipId)) { 
-    showToast('CRITICAL: Your user profile is missing a Dealership ID in the database. Contact an admin.', 'error'); 
-    return; 
+  else if (!isAdmin && (!cu || !cu.dealershipId)) {
+    showToast('CRITICAL: Your user profile is missing a Dealership ID in the database. Contact an admin.', 'error');
+    return;
   }
 
   var sb = getSB(); if (!sb) return;
@@ -1444,8 +1444,7 @@ async function saveUser(editId) {
     });
 
     var textRes = await res.text();
-    console.error("RAW SERVER RESPONSE:", textRes); // <-- Aded for debugging
-    
+
     var data;
     try {
       data = JSON.parse(textRes);
@@ -1453,7 +1452,10 @@ async function saveUser(editId) {
       throw new Error('Raw Server Error: ' + textRes);
     }
 
-    if (!res.ok) throw new Error(data.error || 'Server error');
+    // FIX: Trust the payload explicitly. If it doesn't say success, throw the error.
+    if (!data.success) {
+      throw new Error(data.error || 'Server error');
+    }
 
     closeModalDirect();
     showToast(editId ? 'User successfully updated.' : 'User successfully created.', 'success');
@@ -1517,7 +1519,7 @@ window.addEventListener('DOMContentLoaded', async function () {
     var email = session.user.email;
 
     // Fetch the user's profile details
-var uRes = await sb.from('users').select('*').eq('email', email).maybeSingle();    var role = 'CLIENT', name = email, dealershipId = null;
+    var uRes = await sb.from('users').select('*').eq('email', email).maybeSingle(); var role = 'CLIENT', name = email, dealershipId = null;
 
     if (!uRes.error && uRes.data) {
       role = String(uRes.data.role || 'CLIENT').toUpperCase();
