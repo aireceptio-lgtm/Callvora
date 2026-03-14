@@ -102,8 +102,12 @@ async function handleLogin() {
     var uid = authRes.data.user.id, role = 'CLIENT', name = emailRaw, dealershipId = null;
     var uRes = await client.from('users').select('*').eq('id', uid).maybeSingle();
     
+    if (uRes.error) {
+      console.error('CRITICAL: RLS or Database error fetching user role:', uRes.error);
+    }
+    
     if (!uRes.error && uRes.data) {
-      role = uRes.data.role || 'CLIENT'; 
+      role = String(uRes.data.role || 'CLIENT').toUpperCase(); 
       name = uRes.data.name || emailRaw; 
       dealershipId = uRes.data.dealership_id || null; 
     }
@@ -1512,10 +1516,11 @@ window.addEventListener('DOMContentLoaded', async function () {
     var email = session.user.email;
 
     // Fetch the user's profile details
-    var uRes = await sb.from('users').select('*').eq('id', uid).maybeSingle(); var role = 'CLIENT', name = email, dealershipId = null;
+    var uRes = await sb.from('users').select('*').eq('id', uid).maybeSingle(); 
+    var role = 'CLIENT', name = email, dealershipId = null;
 
     if (!uRes.error && uRes.data) {
-      role = uRes.data.role || 'CLIENT';
+      role = String(uRes.data.role || 'CLIENT').toUpperCase();
       name = uRes.data.name || email;
       dealershipId = uRes.data.dealership_id || null;
     }
