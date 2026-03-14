@@ -100,8 +100,7 @@ async function handleLogin() {
     if (authRes.error) { _loginAttempts++; if (_loginAttempts >= 5) { _loginLockUntil = Date.now() + 60000; _loginAttempts = 0; showLoginError('Too many failed attempts. Locked for 60 seconds.'); } else { showLoginError(authRes.error.message); } resetLoginBtn(); return; }
     _loginAttempts = 0;
     var uid = authRes.data.user.id, role = 'CLIENT', name = emailRaw, dealershipId = null;
-    var uRes = await client.from('users').select('*').eq('id', uid).maybeSingle();
-    
+var uRes = await client.from('users').select('*').eq('email', emailRaw).maybeSingle();    
     if (uRes.error) {
       console.error('CRITICAL: RLS or Database error fetching user role:', uRes.error);
     }
@@ -1516,8 +1515,7 @@ window.addEventListener('DOMContentLoaded', async function () {
     var email = session.user.email;
 
     // Fetch the user's profile details
-    var uRes = await sb.from('users').select('*').eq('id', uid).maybeSingle(); 
-    var role = 'CLIENT', name = email, dealershipId = null;
+var uRes = await sb.from('users').select('*').eq('email', email).maybeSingle();    var role = 'CLIENT', name = email, dealershipId = null;
 
     if (!uRes.error && uRes.data) {
       role = String(uRes.data.role || 'CLIENT').toUpperCase();
