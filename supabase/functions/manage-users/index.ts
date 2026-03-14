@@ -115,8 +115,10 @@ Deno.serve(async (req) => {
     throw new Error("Unknown action: " + action);
 
   } catch (error: any) {
-    console.error("manage-users error:", error.message);
-    return new Response(JSON.stringify({ error: error.message || "Unknown error" }), {
+    console.error("manage-users error:", error);
+    // Return the exact raw error to the frontend so we can debug it
+    const errDetails = error?.message || error?.toString() || JSON.stringify(error) || "Unknown error";
+    return new Response(JSON.stringify({ error: errDetails }), {
       status: 400,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
