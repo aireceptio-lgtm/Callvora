@@ -1444,6 +1444,8 @@ async function saveUser(editId) {
     });
 
     var textRes = await res.text();
+    console.error("RAW SERVER RESPONSE:", textRes); // <-- Aded for debugging
+    
     var data;
     try {
       data = JSON.parse(textRes);
