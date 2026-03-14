@@ -1,5 +1,4 @@
-import { createClient } from 'npm:@supabase/supabase-js@2'
-
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 // Standard CORS headers
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
