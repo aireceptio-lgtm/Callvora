@@ -18,7 +18,8 @@ DROP POLICY IF EXISTS "Auth Recharge Full Access" ON public.recharge_history;
 DROP POLICY IF EXISTS "Allow all access vehicles" ON public.vehicles;
 DROP POLICY IF EXISTS "Auth Vehicles Full Access" ON public.vehicles;
 
--- STEP 3: Securely rebuild helper functions
+-- STEP 3: Drop and securely rebuild helper functions
+DROP FUNCTION IF EXISTS public.is_admin() CASCADE;
 CREATE OR REPLACE FUNCTION public.is_admin()
 RETURNS boolean
 LANGUAGE sql
@@ -30,13 +31,14 @@ AS $$
   );
 $$;
 
+DROP FUNCTION IF EXISTS public.get_user_dealership_id() CASCADE;
 CREATE OR REPLACE FUNCTION public.get_user_dealership_id()
-RETURNS uuid
+RETURNS text
 LANGUAGE sql
 SECURITY DEFINER
 SET search_path = public
 AS $$
-  SELECT dealership_id FROM public.users WHERE id = auth.uid();
+  SELECT dealership_id::text FROM public.users WHERE id = auth.uid();
 $$;
 
 -- STEP 4: Rebuild Admin policies with explicit WITH CHECK so INSERT/UPDATE work
