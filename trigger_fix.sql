@@ -1,11 +1,65 @@
--- FINAL FIX: Drop the privilege-escalation trigger
--- The Edge Function (manage-users) already performs security checks server-side.
--- This trigger is redundant and blocks the Admin from updating users.
--- Run this once in the Supabase SQL Editor.
+-- ==============================================================================
+-- FINAL COMPREHENSIVE FIX: Run this ENTIRE script in Supabase SQL Editor
+-- This will definitively fix the admin user add/update issue
 -- ==============================================================================
 
--- Step 1: Drop the blocking trigger
+-- STEP 1: Drop the blocking trigger (main cause of the error)
 DROP TRIGGER IF EXISTS tr_check_user_privilege_escalation ON public.users;
-
--- Step 2: Also drop the trigger function since it's no longer needed
 DROP FUNCTION IF EXISTS public.check_user_privilege_escalation();
+
+-- STEP 2: Drop all old "always true" permissive policies that Supabase warned about
+DROP POLICY IF EXISTS "Auth Users Full Access" ON public.users;
+DROP POLICY IF EXISTS "Auth Calls Full Access" ON public.calls;
+DROP POLICY IF EXISTS "Auth Dealerships Full Access" ON public.dealerships;
+DROP POLICY IF EXISTS "Auth Leads Full Access" ON public.leads;
+DROP POLICY IF EXISTS "Allow all access leads" ON public.leads;
+DROP POLICY IF EXISTS "Allow public insert access" ON public.recharge_history;
+DROP POLICY IF EXISTS "Auth Recharge Full Access" ON public.recharge_history;
+DROP POLICY IF EXISTS "Allow all access vehicles" ON public.vehicles;
+DROP POLICY IF EXISTS "Auth Vehicles Full Access" ON public.vehicles;
+
+-- STEP 3: Securely rebuild helper functions
+CREATE OR REPLACE FUNCTION public.is_admin()
+RETURNS boolean
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.users WHERE id = auth.uid() AND role = 'ADMIN'
+  );
+$$;
+
+CREATE OR REPLACE FUNCTION public.get_user_dealership_id()
+RETURNS uuid
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT dealership_id FROM public.users WHERE id = auth.uid();
+$$;
+
+-- STEP 4: Rebuild Admin policies with explicit WITH CHECK so INSERT/UPDATE work
+DROP POLICY IF EXISTS "Admins have full access to dealerships" ON public.dealerships;
+CREATE POLICY "Admins have full access to dealerships" ON public.dealerships
+  FOR ALL USING (public.is_admin()) WITH CHECK (public.is_admin());
+
+DROP POLICY IF EXISTS "Admins have full access to users" ON public.users;
+CREATE POLICY "Admins have full access to users" ON public.users
+  FOR ALL USING (public.is_admin()) WITH CHECK (public.is_admin());
+
+DROP POLICY IF EXISTS "Admins have full access to vehicles" ON public.vehicles;
+CREATE POLICY "Admins have full access to vehicles" ON public.vehicles
+  FOR ALL USING (public.is_admin()) WITH CHECK (public.is_admin());
+
+DROP POLICY IF EXISTS "Admins have full access to leads" ON public.leads;
+CREATE POLICY "Admins have full access to leads" ON public.leads
+  FOR ALL USING (public.is_admin()) WITH CHECK (public.is_admin());
+
+DROP POLICY IF EXISTS "Admins have full access to calls" ON public.calls;
+CREATE POLICY "Admins have full access to calls" ON public.calls
+  FOR ALL USING (public.is_admin()) WITH CHECK (public.is_admin());
+
+DROP POLICY IF EXISTS "Admins have full access to recharge_history" ON public.recharge_history;
+CREATE POLICY "Admins have full access to recharge_history" ON public.recharge_history
+  FOR ALL USING (public.is_admin()) WITH CHECK (public.is_admin());
