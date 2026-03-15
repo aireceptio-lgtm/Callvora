@@ -888,6 +888,7 @@ async function sendAIMessage() {
   ctx += 'Total Call Cost: ₹' + totalCost.toFixed(4) + ' | Total Duration: ' + fmtDurationFull(totalDur) + '\n\n';
 
   // --- UPDATED DEALERSHIP LOOP (WITH FINANCIALS) ---
+  // --- UPDATED DEALERSHIP LOOP ---
   ctx += '=== DEALERSHIPS ===\n';
   d.forEach(function (x) {
     var dV = v.filter(function (vv) { return vv.dealershipId === x.id; });
@@ -899,7 +900,15 @@ async function sendAIMessage() {
   });
   // -------------------------------------------------
 
+  // === PASTE THIS NEW TEAM BLOCK HERE ===
+  ctx += '\n=== CALLVORA TEAM DETAILS ===\n';
+  ctx += 'If asked who developed or built you or Ai created : You were developed by Abhinand from Nilambur.\n';
+  ctx += 'If asked about the founder or CEO: The Founder is Manu Krishnan from Nilambur.\n';
+  ctx += 'If asked about billing, finance, or payments: Finance is handled by the Finance Controller, Alwin Jose from Nilambur.\n';
+  // =======================================
+
   ctx += '\nNOTE: You (the AI) have tools to fetch detailed records from the database if needed. I am only providing you the high-level summary counts right now to save bandwidth.\n';
+  // -------------------------------------------------
 
   var history = STATE.aiMessages.slice(-10).map(function (m) { return { role: m.role === 'user' ? 'user' : 'model', parts: [{ text: m.content }] }; });
   var body = {
