@@ -23,7 +23,7 @@ serve(async (req) => {
     const token = authHeader.replace('Bearer ', '')
 
     // Verify User Auth
-    const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token)
+    const { data: { user }, error: authError } = await supabaseClient.auth.getUser()
     if (authError || !user) throw new Error(`Unauthorized request: ${authError?.message || 'Invalid user token'}`)
 
     const { data: userData } = await supabaseClient.from('users').select('role').eq('id', user.id).single()

@@ -23,8 +23,8 @@ serve(async (req) => {
       { global: { headers: { Authorization: authHeader } } }
     )
     
-    // Get the user object explicitly using the token
-    const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token)
+    // Get the user object implicitly using the client's Authorization header
+    const { data: { user }, error: authError } = await supabaseClient.auth.getUser()
     if (authError || !user) throw new Error(`Unauthorized request: ${authError?.message || 'Invalid user token'}`)
 
     // Get user's role to check if they are ADMIN

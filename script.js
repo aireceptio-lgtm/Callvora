@@ -48,7 +48,7 @@ function fmtDuration(s) { var sec = parseInt(s, 10) || 0; return (sec / 60).toFi
 function fmtDurationFull(t) { var sec = parseInt(t, 10) || 0; return (sec / 60).toFixed(3) + ' min'; } function outcomeLabel(o) { return { BOOKED_VISIT: 'Booked Visit', FOLLOW_UP: 'Follow-up', NOT_INTERESTED: 'Not Interested', UNANSWERED: 'Unanswered' }[o] || o || '–'; }
 function outcomeBadge(o) { return { BOOKED_VISIT: 'badge-success', FOLLOW_UP: 'badge-warm', NOT_INTERESTED: 'badge-neutral', UNANSWERED: 'badge-danger' }[o] || 'badge-neutral'; }
 function scoreBadge(s) { return { HOT: 'badge-hot', WARM: 'badge-warm', COLD: 'badge-cold' }[s] || 'badge-neutral'; }
-function planBadge(p) { var up = String(p || '').toUpperCase(); return { SUPER: 'badge-warning', GENERAL: 'badge-info', NARROW: 'badge-neutral' }[up] || 'badge-neutral'; }
+function planBadge(p) { return { ENTERPRISE: 'badge-warning', GROWTH: 'badge-info', STARTER: 'badge-neutral' }[p] || 'badge-neutral'; }
 function roleBadge(r) { return { ADMIN: 'badge-admin', CLIENT: 'badge-neutral' }[r] || 'badge-neutral'; }
 
 /* ── DATA NORMALIZERS ─────────────────────────────────────────── */
@@ -573,7 +573,7 @@ function renderDealerships() {
   return '<div class="page-header-row"><div><div class="page-title font-display">Dealerships</div><div class="page-sub">' + d.length + ' registered accounts</div></div><button onclick="openDealershipModal()" class="btn btn-primary">' + icon('plus', 15) + ' Create Dealership</button></div>' +
     '<div class="filters-bar"><div style="position:relative;flex:1;min-width:180px"><div style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-3);pointer-events:none">' + icon('search', 14) + '</div><input class="input" style="padding-left:38px" placeholder="Search by name, email, or ID..." value="' + escH(STATE.dSearch) + '" oninput="STATE.dSearch=this.value;rerenderPage(\'dealerships\')" maxlength="100"></div>' +
     '<select class="input" style="width:auto;min-width:140px" onchange="STATE.dStat=this.value;rerenderPage(\'dealerships\')"><option value="">All Status</option><option value="active" ' + (fS === 'active' ? 'selected' : '') + '>Active</option><option value="suspended" ' + (fS === 'suspended' ? 'selected' : '') + '>Suspended</option></select>' +
-    '<select class="input" style="width:auto;min-width:140px" onchange="STATE.dPlan=this.value;rerenderPage(\'dealerships\')"><option value="">All Plans</option><option value="Narrow" ' + (fP === 'Narrow' ? 'selected' : '') + '>Narrow</option><option value="General" ' + (fP === 'General' ? 'selected' : '') + '>General</option><option value="Super" ' + (fP === 'Super' ? 'selected' : '') + '>Super</option></select></div>' +
+    '<select class="input" style="width:auto;min-width:140px" onchange="STATE.dPlan=this.value;rerenderPage(\'dealerships\')"><option value="">All Plans</option><option value="starter" ' + (fP === 'starter' ? 'selected' : '') + '>Starter</option><option value="pro" ' + (fP === 'pro' ? 'selected' : '') + '>Pro</option><option value="enterprise" ' + (fP === 'enterprise' ? 'selected' : '') + '>Enterprise</option></select></div>' +
     '<div class="card" style="overflow:hidden"><div style="overflow-x:auto"><table><thead><tr>' +
     '<th class="table-th table-th-num">#</th><th class="table-th">Dealership</th><th class="table-th">Status</th><th class="table-th">Vehicles</th><th class="table-th">Inv Value</th><th class="table-th">Leads</th><th class="table-th">Calls</th><th class="table-th">Call Cost</th><th class="table-th">Call Duration</th><th class="table-th">Actions</th>' +
     '</tr></thead><tbody>' +
@@ -713,11 +713,11 @@ function renderAnalytics() {
     vList = vList.filter(function (x) { return x.dealershipId === fD; });
   }
 
-  var plans = { NARROW: 0, GENERAL: 0, SUPER: 0 };
-  dList.forEach(function (x) { var up = String(x.plan || '').toUpperCase(); plans[up] = (plans[up] || 0) + 1; });
+  var plans = { STARTER: 0, GROWTH: 0, ENTERPRISE: 0 };
+  dList.forEach(function (x) { plans[x.plan] = (plans[x.plan] || 0) + 1; });
   var tL = lList.length, tC = cList.length, tV = vList.length;
   var act = dList.filter(function (x) { return x.isActive; }).length;
-  var planRates = { NARROW: 99, GENERAL: 249, SUPER: 599 }, planColors = { NARROW: '#4a5a72', GENERAL: '#38bdf8', SUPER: '#fbbf24' };
+  var planRates = { STARTER: 99, GROWTH: 249, ENTERPRISE: 599 }, planColors = { STARTER: '#4a5a72', GROWTH: '#38bdf8', ENTERPRISE: '#fbbf24' };
   var monthlyRevenue = Object.entries(plans).reduce(function (s, e) { return s + e[1] * (planRates[e[0]] || 0); }, 0);
   var planTotal = Object.values(plans).reduce(function (s, v) { return s + v; }, 0) || 1;
   var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'], now = new Date().getMonth();
@@ -902,7 +902,7 @@ async function sendAIMessage() {
 
   // === PASTE THIS NEW TEAM BLOCK HERE ===
   ctx += '\n=== CALLVORA TEAM DETAILS ===\n';
-  ctx += 'If asked who developed or built you or Ai created : You were developed by Abhinand from Nilambur.\n';
+  ctx += 'If asked who developed or built you: You were developed by Abhinand.\n';
   ctx += 'If asked about the founder or CEO: The Founder is Manu Krishnan from Nilambur.\n';
   ctx += 'If asked about billing, finance, or payments: Finance is handled by the Finance Controller, Alwin Jose from Nilambur.\n';
   // =======================================
@@ -918,12 +918,6 @@ async function sendAIMessage() {
   try {
     var sb = getSB();
     var session = await sb.auth.getSession();
-    if (!session.data.session) {
-      showToast("Your session has expired. Please log in again.", "error");
-      STATE.aiTyping = false;
-      rerenderPage('ai-assistant');
-      return;
-    }
     var token = session.data.session.access_token;
 
     var res = await fetch(SUPA_URL + '/functions/v1/chat', {
@@ -1285,10 +1279,11 @@ function openDealershipModal(editId) {
     '<div class="form-group"><label>Name</label><input id="dName" class="form-input" value="' + escH(d ? d.name || '' : '') + '" maxlength="120"></div>' +
     '<div class="form-group"><label>Email</label><input id="dEmail" class="form-input" type="email" value="' + escH(d ? d.email || '' : '') + '" maxlength="120"></div>' +
     '<div class="form-group"><label>Phone</label><input id="dPhone" class="form-input" value="' + escH(d ? d.phone || '' : '') + '" maxlength="30"></div>' +
+    '<div class="form-group"><label>Minute Limit</label><input id="dLimit" class="form-input" type="number" value="' + (d ? d.minute_limit || '' : '') + '" placeholder="e.g. 500"></div>' +
     '<div class="form-group"><label>Plan</label><select id="dPlan" class="form-input">' +
-    '<option value="Narrow" ' + (d && String(d.plan||'').toUpperCase() === 'NARROW' ? 'selected' : '') + '>Narrow</option>' +
-    '<option value="General" ' + (d && String(d.plan||'').toUpperCase() === 'GENERAL' ? 'selected' : '') + '>General</option>' +
-    '<option value="Super" ' + (d && String(d.plan||'').toUpperCase() === 'SUPER' ? 'selected' : '') + '>Super</option>' +
+    '<option value="starter" ' + (d && d.plan === 'starter' ? 'selected' : '') + '>Starter</option>' +
+    '<option value="pro" ' + (d && d.plan === 'pro' ? 'selected' : '') + '>Pro</option>' +
+    '<option value="enterprise" ' + (d && d.plan === 'enterprise' ? 'selected' : '') + '>Enterprise</option>' +
     '</select></div>' +
     '<div class="form-group"><label>Status</label><select id="dStatus" class="form-input">' +
     '<option value="active" ' + (d && d.status === 'active' ? 'selected' : '') + '>Active</option>' +
@@ -1312,11 +1307,28 @@ async function createDealership() {
   var plan = document.getElementById('dPlan').value;
   var status = document.getElementById('dStatus').value;
   var active = document.getElementById('dActive').value === 'true';
+
+  // NEW: Grab the minute limit from the input box
+  var limit = parseInt(document.getElementById('dLimit').value) || null;
+
   if (!name) { showToast('Dealership name is required.', 'warn'); return; }
   var sb = getSB(); if (!sb) return;
-  var r = await sb.from('dealerships').insert({ name: name, email: email, phone: phone, plan: plan, status: status, is_active: active, joined: new Date().toISOString().split('T')[0] });
+
+  // NEW: Added minute_limit to the database insert payload
+  var r = await sb.from('dealerships').insert({
+    name: name,
+    email: email,
+    phone: phone,
+    plan: plan,
+    status: status,
+    is_active: active,
+    minute_limit: limit,
+    joined: new Date().toISOString().split('T')[0]
+  });
+
   if (r.error) { showToast('Error: ' + r.error.message, 'error'); return; }
-  closeModalDirect(); showToast('Dealership created.', 'success');
+  closeModalDirect();
+  showToast('Dealership created.', 'success');
 }
 
 async function updateDealershipRecord(id) {
@@ -1327,13 +1339,25 @@ async function updateDealershipRecord(id) {
   var status = document.getElementById('dStatus').value;
   var active = document.getElementById('dActive').value === 'true';
 
+  // NEW: Grab the minute limit from the input box
+  var limit = parseInt(document.getElementById('dLimit').value) || null;
+
   // Auto-sync status based on active dropdown selection
   if (active && status === 'suspended') status = 'active';
   if (!active && status === 'active') status = 'suspended';
 
   if (!name) { showToast('Dealership name is required.', 'warn'); return; }
 
-  var payload = { name: name, email: email, phone: phone, plan: plan, status: status, is_active: active };
+  // NEW: Added minute_limit to the payload
+  var payload = {
+    name: name,
+    email: email,
+    phone: phone,
+    plan: plan,
+    status: status,
+    is_active: active,
+    minute_limit: limit
+  };
 
   var sb = getSB(); if (!sb) return;
   var r = await sb.from('dealerships').update(payload).eq('id', id);
@@ -1345,8 +1369,16 @@ async function updateDealershipRecord(id) {
   // INSTANT LOCAL UI UPDATE & REFRESH (Fixes the delay)
   var d = STATE.dealerships.find(function (x) { return x.id === id; });
   if (d) {
-    d.name = name; d.email = email; d.phone = phone; d.plan = plan; d.status = status; d.isActive = active; d.is_active = active;
+    d.name = name;
+    d.email = email;
+    d.phone = phone;
+    d.plan = plan;
+    d.status = status;
+    d.isActive = active;
+    d.is_active = active;
+    d.minute_limit = limit; // NEW: Instantly update the limit in the local UI
   }
+
   var cp = STATE.currentPage;
   if (cp === 'dealerships') rerenderPage('dealerships');
   if (cp === 'dealer-detail') rerenderPage('dealer-detail');
