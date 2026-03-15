@@ -364,10 +364,8 @@ function renderCalls() {
     '<button class="pill-filter' + (STATE.callFilter === 'UNANSWERED' ? ' active' : '') + '" onclick="STATE.callFilter=\'UNANSWERED\';rerenderPage(\'calls\')">Unanswered</button>' +
     '<button class="pill-filter' + (STATE.callFilter === 'NOT_INTERESTED' ? ' active' : '') + '" onclick="STATE.callFilter=\'NOT_INTERESTED\';rerenderPage(\'calls\')">Not Interested</button></div>' +
     '<div class="card" style="overflow:hidden"><div style="overflow-x:auto"><table><thead><tr>' +
-    '<th class="table-th table-th-num">#</th><th class="table-th">Date &amp; Time</th><th class="table-th">Caller Name</th><th class="table-th">Caller Phone</th><th class="table-th">Duration</th><th class="table-th">Outcome</th><th class="table-th">Recording</th><th class="table-th">Transcript</th>' +
-    '</tr></thead><tbody>' +
-    (filtered.length === 0 ? '<tr><td colspan="8"><div class="empty-state">' + icon('phone', 28) + '<br>No calls found</div></td></tr>' :
-      filtered.map(function (c, i) {
+    '<th class="table-th table-th-num">#</th><th class="table-th">Date &amp; Time</th><th class="table-th">Caller Name</th><th class="table-th">Caller Phone</th><th class="table-th">Duration</th><th class="table-th">Outcome</th><th class="table-th">Transcript</th>' +    '</tr></thead><tbody>' +
+    (filtered.length === 0 ? '<tr><td colspan="7"><div class="empty-state">' + icon('phone', 28) + '<br>No calls found</div></td></tr>' :      filtered.map(function (c, i) {
         return '<tr>' +
           '<td class="table-td-num">' + (i + 1) + '</td>' +
           '<td class="table-td" style="font-size:12px;color:var(--text-3);white-space:nowrap">' + fmtDate(c.call_at) + '</td>' +
@@ -375,7 +373,6 @@ function renderCalls() {
           '<td class="table-td">' + escH(c.callerPhone) + '</td>' +
           '<td class="table-td">' + fmtDuration(c.duration) + '</td>' +
           '<td class="table-td"><span class="badge ' + outcomeBadge(c.outcome) + '">' + outcomeLabel(c.outcome) + '</span></td>' +
-          '<td class="table-td">' + (c.recordingUrl ? '<a href="' + escH(c.recordingUrl) + '" target="_blank" rel="noopener noreferrer" class="recording-link">' + icon('play', 12) + ' Play</a>' : '<span style="color:var(--text-3);font-size:12px">None</span>') + '</td>' +
           '<td class="table-td">' + (c.transcript ? '<button onclick="showTranscript(\'' + escQ(c.id) + '\')" class="btn btn-ghost btn-sm" style="font-size:11px">' + icon('eye', 12) + ' View</button>' : '<span style="color:var(--text-3);font-size:12px">None</span>') + '</td>' +
           '</tr>';
       }).join('')) +
@@ -658,8 +655,7 @@ function renderDTCalls(calls) {
   var c = calls.filter(function (x) { return (!s || (x.callerName || '').toLowerCase().includes(s) || (x.callerPhone || '').toLowerCase().includes(s)) && (!fO || x.outcome === fO); });
   var html = '<div class="filters-bar"><div style="position:relative;flex:1;min-width:180px"><div style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-3);pointer-events:none">' + icon('search', 14) + '</div><input class="input" style="padding-left:38px" placeholder="Search caller..." value="' + escH(STATE.detCSearch) + '" oninput="STATE.detCSearch=this.value;rerenderDealerDetail()" maxlength="100"></div><select class="input" style="width:auto;min-width:140px" onchange="STATE.detCOut=this.value;rerenderDealerDetail()"><option value="">All Outcomes</option><option value="BOOKED_VISIT" ' + (fO === 'BOOKED_VISIT' ? 'selected' : '') + '>Booked</option><option value="FOLLOW_UP" ' + (fO === 'FOLLOW_UP' ? 'selected' : '') + '>Follow Up</option><option value="UNANSWERED" ' + (fO === 'UNANSWERED' ? 'selected' : '') + '>Unanswered</option></select></div>';
   if (c.length === 0) return html + '<div class="empty-state">' + icon('phone', 28) + '<br>No calls found</div>';
-  return html + '<div class="card" style="overflow:hidden"><div style="overflow-x:auto"><table><thead><tr><th class="table-th table-th-num">#</th><th class="table-th">Date</th><th class="table-th">Caller</th><th class="table-th">Duration</th><th class="table-th">Outcome</th><th class="table-th">Cost</th><th class="table-th">Recording</th></tr></thead><tbody>' + c.map(function (cc, i) { return '<tr><td class="table-td-num">' + (i + 1) + '</td><td class="table-td" style="font-size:12px">' + fmtDate(cc.call_at) + '</td><td class="table-td"><div style="color:var(--text-1);font-weight:500">' + escH(cc.callerName || '–') + '</div><div style="font-size:11px;color:var(--text-3)">' + escH(cc.callerPhone) + '</div></td><td class="table-td">' + fmtDuration(cc.duration) + '</td><td class="table-td"><span class="badge ' + outcomeBadge(cc.outcome) + '">' + outcomeLabel(cc.outcome) + '</span></td><td class="table-td"><span class="cost-badge">' + fmtCost(cc.cost) + '</span></td><td class="table-td">' + (cc.recordingUrl ? '<a href="' + escH(cc.recordingUrl) + '" target="_blank" class="recording-link">Play</a>' : '<span style="color:var(--text-3);font-size:12px">None</span>') + '</td></tr>'; }).join('') + '</tbody></table></div></div>';
-}
+return html + '<div class="card" style="overflow:hidden"><div style="overflow-x:auto"><table><thead><tr><th class="table-th table-th-num">#</th><th class="table-th">Date</th><th class="table-th">Caller</th><th class="table-th">Duration</th><th class="table-th">Outcome</th><th class="table-th">Cost</th></tr></thead><tbody>' + c.map(function (cc, i) { return '<tr><td class="table-td-num">' + (i + 1) + '</td><td class="table-td" style="font-size:12px">' + fmtDate(cc.call_at) + '</td><td class="table-td"><div style="color:var(--text-1);font-weight:500">' + escH(cc.callerName || '–') + '</div><div style="font-size:11px;color:var(--text-3)">' + escH(cc.callerPhone) + '</div></td><td class="table-td">' + fmtDuration(cc.duration) + '</td><td class="table-td"><span class="badge ' + outcomeBadge(cc.outcome) + '">' + outcomeLabel(cc.outcome) + '</span></td><td class="table-td"><span class="cost-badge">' + fmtCost(cc.cost) + '</span></td></tr>'; }).join('') + '</tbody></table></div></div>';}
 function renderDTLeads(leads) {
   var s = (STATE.detLSearch || '').toLowerCase(), fS = STATE.detLScore || '';
   var l = leads.filter(function (x) { return (!s || (x.customerName || '').toLowerCase().includes(s) || (x.phoneNumber || '').toLowerCase().includes(s)) && (!fS || x.score === fS); });
@@ -1047,8 +1043,7 @@ function openVehicleModal(id) {
     '<div class="form-group"><label>Make <span class="req">*</span></label><input id="vMake" class="form-input" value="' + escH(v ? v.make || '' : '') + '" maxlength="60" placeholder="e.g. Toyota"></div>' +
     '<div class="form-group"><label>Model <span class="req">*</span></label><input id="vModel" class="form-input" value="' + escH(v ? v.model || '' : '') + '" maxlength="60" placeholder="e.g. Camry"></div>' +
     '<div class="form-group"><label>Year <span class="req">*</span></label><input id="vYear" class="form-input" type="number" value="' + (v ? v.year || '' : '') + '" min="1900" max="2100" placeholder="e.g. 2024"></div>' +
-    '<div class="form-group"><label>Price (₹) <span class="req">*</span></label><input id="vPrice" class="form-input" type="number" value="' + (v ? v.price || '' : '') + '" min="0" placeholder="e.g. 15000"></div>' +
-    '<div class="form-group"><label>Fuel Type</label>' +
+    '<div class="form-group"><label>Price (₹)</label><input id="vPrice" class="form-input" type="number" value="' + (v && v.price ? v.price : '') + '" min="0" placeholder="e.g. 15000"></div>' +    '<div class="form-group"><label>Fuel Type</label>' +
     '<select id="vFuel" class="form-input" onchange="document.getElementById(\'vFuelCustomWrap\').style.display = this.value === \'Other\' ? \'block\' : \'none\'">' +
     '<option value="">Select Fuel...</option>' +
     '<option value="Petrol" ' + (selectFuel === 'Petrol' ? 'selected' : '') + '>Petrol</option>' +
@@ -1104,8 +1099,7 @@ async function saveVehicle(id) {
   var selectedDealerId = adminSelectEl ? adminSelectEl.value : null;
 
   // STRICT VALIDATION
-  if (!make || !model || !year || !price) { showToast('Make, Model, Year, and Price are required.', 'warn'); return; }
-  if (isAdmin && !selectedDealerId) { showToast('Please select a Dealership to assign this vehicle to.', 'warn'); return; }
+if (!make || !model || !year) { showToast('Make, Model, and Year are required.', 'warn'); return; }  if (isAdmin && !selectedDealerId) { showToast('Please select a Dealership to assign this vehicle to.', 'warn'); return; }
 
   var payload = { make: make, model: model, year: year, price: price, fuel_type: fuel, transmission: trans, mileage: mileage, is_available: avail, description: desc };
 
