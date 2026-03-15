@@ -572,21 +572,23 @@ function renderDealerships() {
     '<select class="input" style="width:auto;min-width:140px" onchange="STATE.dStat=this.value;rerenderPage(\'dealerships\')"><option value="">All Status</option><option value="active" ' + (fS === 'active' ? 'selected' : '') + '>Active</option><option value="suspended" ' + (fS === 'suspended' ? 'selected' : '') + '>Suspended</option></select>' +
     '<select class="input" style="width:auto;min-width:140px" onchange="STATE.dPlan=this.value;rerenderPage(\'dealerships\')"><option value="">All Plans</option><option value="starter" ' + (fP === 'starter' ? 'selected' : '') + '>Starter</option><option value="pro" ' + (fP === 'pro' ? 'selected' : '') + '>Pro</option><option value="enterprise" ' + (fP === 'enterprise' ? 'selected' : '') + '>Enterprise</option></select></div>' +
     '<div class="card" style="overflow:hidden"><div style="overflow-x:auto"><table><thead><tr>' +
-    '<th class="table-th table-th-num">#</th><th class="table-th">Dealership</th><th class="table-th">Status</th><th class="table-th">Vehicles</th><th class="table-th">Inv Value</th><th class="table-th">Leads</th><th class="table-th">Calls</th><th class="table-th">Call Cost</th><th class="table-th">Call Duration</th><th class="table-th">Actions</th>' +
-    '</tr></thead><tbody>' +
-    (d.length === 0 ? '<tr><td colspan="10"><div class="empty-state">' + icon('building', 28) + '<br>No dealerships found</div></td></tr>' :
-      d.map(function (dd, i) {
+'<th class="table-th table-th-num">#</th><th class="table-th">Dealership</th><th class="table-th">Status</th><th class="table-th">Days Left</th><th class="table-th">Vehicles</th><th class="table-th">Inv Value</th><th class="table-th">Leads</th><th class="table-th">Calls</th><th class="table-th">Call Cost</th><th class="table-th">Call Duration</th><th class="table-th">Actions</th>' +    '</tr></thead><tbody>' +
+(d.length === 0 ? '<tr><td colspan="11"><div class="empty-state">' + icon('building', 28) + '<br>No dealerships found</div></td></tr>' :      d.map(function (dd, i) {
         // Admin specific stats calculations
         var dV = STATE.vehicles.filter(function (v) { return v.dealershipId === dd.id; });
         var dC = STATE.calls.filter(function (c) { return c.dealershipId === dd.id; });
         var invVal = dV.reduce(function (sum, v) { return sum + (v.price || 0); }, 0);
         var callCost = dC.reduce(function (sum, c) { return sum + (c.cost || 0); }, 0);
         var callDur = dC.reduce(function (sum, c) { return sum + (c.duration || 0); }, 0);
+        
+        var stats = getDealerStats(dd, dC);
+        var daysColor = stats.daysLeft <= 5 ? 'color:var(--rose);font-weight:600' : 'color:var(--text-2)';
 
         return '<tr>' +
           '<td class="table-td-num">' + (i + 1) + '</td>' +
           '<td class="table-td"><div style="color:var(--text-1);font-weight:500;cursor:pointer;text-decoration:underline;text-underline-offset:3px;text-decoration-color:rgba(245,158,11,.3);margin-bottom:2px" onclick="openDealerDetail(\'' + escQ(dd.id) + '\')">' + escH(dd.name) + '</div><div style="color:var(--text-3);font-size:11px">' + escH(dd.email) + '</div></td>' +
           '<td class="table-td"><span class="badge ' + (dd.isActive ? 'badge-success' : 'badge-danger') + '">' + (dd.isActive ? 'Active' : 'Suspended') + '</span></td>' +
+          '<td class="table-td" style="' + daysColor + '">' + stats.daysLeft + ' days</td>' +
           '<td class="table-td">' + (dd.vehicles || 0) + '</td>' +
           '<td class="table-td" style="color:var(--emerald);font-weight:500">' + fmt(invVal) + '</td>' +
           '<td class="table-td">' + (dd.leads || 0) + '</td>' +
@@ -615,14 +617,14 @@ function renderDealerDetail() {
   var dCost = dC.reduce(function (s, c) { return s + (c.cost || 0); }, 0);
   var dDur = dC.reduce(function (s, c) { return s + (c.duration || 0); }, 0);
   var dVal = dV.reduce(function (s, v) { return s + (v.price || 0); }, 0);
+  var stats = getDealerStats(d, dC);
   var tab = STATE.dealerDetailTab || 'overview';
   var tabs = [{ id: 'overview', label: 'Overview' }, { id: 'calls', label: 'Calls (' + dC.length + ')' }, { id: 'leads', label: 'Leads (' + dL.length + ')' }, { id: 'vehicles', label: 'Vehicles (' + dV.length + ')' }, { id: 'users', label: 'Users (' + dU.length + ')' }, { id: 'settings', label: 'Settings' }];
   var header = '<button class="back-btn" onclick="navigate(\'dealerships\')">' + icon('back', 14) + ' Back to Dealerships</button>' +
     '<div class="dealer-detail-header"><div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:16px">' +
     '<div style="display:flex;align-items:center;gap:16px"><div style="width:52px;height:52px;border-radius:12px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.2);display:flex;align-items:center;justify-content:center;font-family:\'Syne\',sans-serif;font-weight:700;font-size:18px;color:var(--amber)">' + escH((d.name || '?').slice(0, 2).toUpperCase()) + '</div>' +
     '<div><div style="font-family:\'Syne\',sans-serif;font-weight:700;font-size:20px;color:var(--text-1)">' + escH(d.name) + '</div><div style="font-size:13px;color:var(--text-3);margin-top:4px;display:flex;align-items:center;gap:12px"><span>' + escH(d.email) + '</span>' + (d.phone ? '<span>' + escH(d.phone) + '</span>' : '') + '</div></div></div>' +
-    '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span class="badge ' + planBadge(d.plan) + '">' + escH(d.plan || '–') + '</span><span class="badge ' + (d.isActive ? 'badge-success' : 'badge-danger') + '">' + (d.isActive ? 'Active' : 'Suspended') + '</span>' +
-    '<button onclick="openDealershipModal(\'' + escQ(d.id) + '\')" class="btn btn-secondary btn-sm">' + icon('pencil', 13) + ' Edit</button>' +
+'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span class="badge ' + planBadge(d.plan) + '">' + escH(d.plan || '–') + '</span><span class="badge ' + (d.isActive ? 'badge-success' : 'badge-danger') + '">' + (d.isActive ? 'Active' : 'Suspended') + '</span><span class="badge ' + (stats.daysLeft <= 5 ? 'badge-danger' : 'badge-neutral') + '">' + stats.daysLeft + ' Days Left</span>' +    '<button onclick="openDealershipModal(\'' + escQ(d.id) + '\')" class="btn btn-secondary btn-sm">' + icon('pencil', 13) + ' Edit</button>' +
     '<button onclick="toggleDealership(\'' + escQ(d.id) + '\')" class="btn ' + (d.isActive ? 'btn-danger' : 'btn-success') + ' btn-sm">' + (d.isActive ? 'Suspend' : 'Activate') + '</button></div>' +
     '</div>' +
     '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:12px;margin-top:20px">' +
@@ -678,12 +680,16 @@ function renderDTUsers(users) {
   return html + '<div class="card" style="overflow:hidden"><div style="overflow-x:auto"><table><thead><tr><th class="table-th table-th-num">#</th><th class="table-th">Name</th><th class="table-th">Email</th><th class="table-th">Role</th></tr></thead><tbody>' + u.map(function (uu, i) { return '<tr><td class="table-td-num">' + (i + 1) + '</td><td class="table-td"><span style="color:var(--text-1);font-weight:500">' + escH(uu.name) + '</span></td><td class="table-td" style="color:var(--text-3)">' + escH(uu.email) + '</td><td class="table-td"><span class="badge ' + roleBadge(uu.role) + '">' + escH(uu.role) + '</span></td></tr>'; }).join('') + '</tbody></table></div></div>';
 }
 function renderDTSettings(d) {
+  var start = new Date(d.cycle_start_date || d.created_at);
+  var end = new Date(start.getTime() + (30 * 24 * 60 * 60 * 1000));
+  var daysLeft = Math.ceil((end - new Date()) / (1000 * 60 * 60 * 24));
   return '<div class="card card-p"><div class="section-title">' + icon('shield', 15) + ' Dealership Info</div>' +
     '<div class="info-row"><div class="info-label">Name</div><div class="info-val">' + escH(d.name) + '</div></div>' +
     '<div class="info-row"><div class="info-label">Email</div><div class="info-val">' + escH(d.email) + '</div></div>' +
     '<div class="info-row"><div class="info-label">Phone</div><div class="info-val">' + escH(d.phone || '–') + '</div></div>' +
     '<div class="info-row"><div class="info-label">Plan</div><div class="info-val"><span class="badge ' + planBadge(d.plan) + '">' + escH(d.plan || '–') + '</span></div></div>' +
     '<div class="info-row"><div class="info-label">Status</div><div class="info-val"><span class="badge ' + (d.isActive ? 'badge-success' : 'badge-danger') + '">' + (d.isActive ? 'Active' : 'Suspended') + '</span></div></div>' +
+    '<div class="info-row"><div class="info-label">Days Left</div><div class="info-val" style="' + (daysLeft <= 5 ? 'color:var(--rose);font-weight:600' : '') + '">' + daysLeft + ' Days (resets ' + end.toLocaleDateString() + ')</div></div>' +
     '<div class="info-row"><div class="info-label">Agent ID</div><div class="info-val" style="font-size:12px;font-family:monospace">' + escH(d.agent_id || '–') + '</div></div>' +
     '<div class="info-row"><div class="info-label">Joined</div><div class="info-val">' + escH(d.joined || fmtDateShort(d.created_at) || '–') + '</div></div></div>' +
     '<div style="margin-top:16px;display:flex;gap:10px">' +
