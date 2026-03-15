@@ -1272,6 +1272,7 @@ function addLeadForDealer(dealershipId) { openLeadModal(dealershipId); }
 function openDealershipModal(editId) {
   var d = editId ? STATE.dealerships.find(function (x) { return x.id === editId; }) : null;
   var saveCall = d ? 'updateDealershipRecord(\'' + escQ(d.id) + '\')' : 'createDealership()';
+
   openModal(
     '<div class="modal-header-bar"><h2>' + (d ? 'Edit Dealership' : 'Add Dealership') + '</h2><button class="modal-close-btn" onclick="closeModalDirect()">✕</button></div>' +
     '<div class="modal-body-inner">' +
@@ -1279,12 +1280,17 @@ function openDealershipModal(editId) {
     '<div class="form-group"><label>Name</label><input id="dName" class="form-input" value="' + escH(d ? d.name || '' : '') + '" maxlength="120"></div>' +
     '<div class="form-group"><label>Email</label><input id="dEmail" class="form-input" type="email" value="' + escH(d ? d.email || '' : '') + '" maxlength="120"></div>' +
     '<div class="form-group"><label>Phone</label><input id="dPhone" class="form-input" value="' + escH(d ? d.phone || '' : '') + '" maxlength="30"></div>' +
-    '<div class="form-group"><label>Minute Limit</label><input id="dLimit" class="form-input" type="number" value="' + (d ? d.minute_limit || '' : '') + '" placeholder="e.g. 500"></div>' +
-    '<div class="form-group"><label>Plan</label><select id="dPlan" class="form-input">' +
-    '<option value="starter" ' + (d && d.plan === 'starter' ? 'selected' : '') + '>Starter</option>' +
-    '<option value="pro" ' + (d && d.plan === 'pro' ? 'selected' : '') + '>Pro</option>' +
-    '<option value="enterprise" ' + (d && d.plan === 'enterprise' ? 'selected' : '') + '>Enterprise</option>' +
+
+    // UPDATED: Default Minute Limit to 150 if it's a new dealership
+    '<div class="form-group"><label>Minute Limit</label><input id="dLimit" class="form-input" type="number" value="' + (d ? d.minute_limit || '' : '150') + '" placeholder="e.g. 150"></div>' +
+
+    // UPDATED: Added the onchange event to auto-fill the Minute Limit box based on the plan
+    '<div class="form-group"><label>Plan</label><select id="dPlan" class="form-input" onchange="document.getElementById(\'dLimit\').value = {starter: 150, pro: 250, enterprise: 400}[this.value] || 150">' +
+    '<option value="starter" ' + (d && d.plan === 'starter' ? 'selected' : '') + '>Starter (150 min)</option>' +
+    '<option value="pro" ' + (d && d.plan === 'pro' ? 'selected' : '') + '>Pro (250 min)</option>' +
+    '<option value="enterprise" ' + (d && d.plan === 'enterprise' ? 'selected' : '') + '>Enterprise (400 min)</option>' +
     '</select></div>' +
+
     '<div class="form-group"><label>Status</label><select id="dStatus" class="form-input">' +
     '<option value="active" ' + (d && d.status === 'active' ? 'selected' : '') + '>Active</option>' +
     '<option value="inactive" ' + (d && d.status === 'inactive' ? 'selected' : '') + '>Inactive</option>' +
@@ -1611,10 +1617,20 @@ async function renderRecharge() {
             </div>
             <div class="card card-p">
                 <div class="section-label">Process Recharge</div>
-                <select id="rech-dealer" class="form-input">
-                    ${STATE.dealerships.map(d => `<option value="${d.id}">${d.name}</option>`).join('')}
-                </select>
-                <input type="datetime-local" id="rech-date" class="form-input" style="margin-top:10px">
+                <div class="form-group">
+                  <label>Select Dealership</label>
+                  <select id="rech-dealer" class="form-input">
+                      ${STATE.dealerships.map(d => `<option value="${d.id}">${d.name} (${d.plan.toUpperCase()})</option>`).join('')}
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>New Cycle Start Date</label>
+                  <input type="datetime-local" id="rech-date" class="form-input">
+                </div>
+                <div class="form-group">
+                  <label>Custom Minutes (Optional)</label>
+                  <input type="number" id="rech-custom" class="form-input" placeholder="Leave blank for plan default">
+                </div>
                 <button class="btn btn-primary w-full" style="margin-top:15px" onclick="processRecharge()">Recharge Now</button>
             </div>
         </div>`;
@@ -1624,32 +1640,48 @@ async function processRecharge() {
   var selectEl = document.getElementById('rech-dealer');
   var did = selectEl.value;
   var dDate = document.getElementById('rech-date').value;
+  var customMin = document.getElementById('rech-custom').value;
 
   if (!did || !dDate) { showToast('Select a dealer and date!', 'warn'); return; }
 
-  // Get the name from the dropdown text
+  // 1. Find the dealership to check its plan
+  var dealer = STATE.dealerships.find(d => d.id === did);
+  if (!dealer) return;
+
+  // 2. Map the default limits
+  var defaultLimits = { starter: 150, pro: 250, enterprise: 400 };
+  var baseLimit = defaultLimits[dealer.plan] || 150;
+
+  // 3. If they typed a custom minute, use that. Otherwise, use the plan's default limit.
+  var finalLimit = customMin ? parseInt(customMin) : baseLimit;
+
   var dName = selectEl.options[selectEl.selectedIndex].text.split(' (')[0];
   var isoDate = new Date(dDate).toISOString();
   var sb = getSB(); if (!sb) return;
 
-  // UPDATE DEALER STATUS
+  // 4. UPDATE DEALER STATUS AND NEW LIMIT
   const { error: upError } = await sb.from('dealerships').update({
     cycle_start_date: isoDate,
     is_active: true,
-    status: 'active'
+    status: 'active',
+    minute_limit: finalLimit
   }).eq('id', did);
 
   if (upError) { showToast('Update failed', 'error'); return; }
 
-  // INSERT INTO HISTORY TABLE
-  const { error: logError } = await sb.from('recharge_history').insert([{
+  // 5. LOG HISTORY
+  await sb.from('recharge_history').insert([{
     dealership_id: did,
-    dealership_name: dName,
+    dealership_name: dName + ` (${finalLimit} mins)`,
     new_cycle_date: isoDate
   }]);
 
-  if (logError) { console.error('History log failed:', logError); }
+  // 6. INSTANT LOCAL UI UPDATE
+  dealer.cycle_start_date = isoDate;
+  dealer.isActive = true;
+  dealer.status = 'active';
+  dealer.minute_limit = finalLimit;
 
-  showToast('Recharge logged and active!', 'success');
-  renderRecharge(); // Refresh the page to show new data
+  showToast(`Recharged with ${finalLimit} minutes!`, 'success');
+  renderRecharge(); // Refresh page
 }
