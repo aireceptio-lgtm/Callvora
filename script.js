@@ -54,7 +54,7 @@ function roleBadge(r) { return { ADMIN: 'badge-admin', CLIENT: 'badge-neutral' }
 /* ── DATA NORMALIZERS ─────────────────────────────────────────── */
 function nv(v) { return Object.assign({}, v, { fuelType: v.fuel_type || v.fuelType || '', isAvailable: v.is_available != null ? v.is_available : (v.isAvailable != null ? v.isAvailable : true), dealershipId: v.dealership_id || v.dealershipId || null, mileage: parseInt(v.mileage, 10) || 0, price: parseFloat(v.price) || 0, transmission: v.transmission || 'AUTOMATIC', description: v.description || '', make: v.make || '', model: v.model || '', year: v.year || '' }); }
 function nl(l) { return Object.assign({}, l, { customerName: l.customer_name || l.customerName || '', phoneNumber: l.phone_number || l.customer_phone || l.phoneNumber || l.customerPhone || '', carInterested: l.car_interested || l.carInterested || '', visitDate: l.visit_date || l.visitDate || null, dealershipId: l.dealership_id || l.dealershipId || null, score: l.score || 'COLD', isContacted: l.is_contacted != null ? l.is_contacted : (l.isContacted || false), callSummary: l.call_summary || l.callSummary || '' }); }
-function nc(c) { return Object.assign({}, c, { callerName: c.caller_name || c.callerName || '', callerPhone: c.caller_phone || c.callerPhone || '', recordingUrl: c.recording_url || c.recordingUrl || null, dealershipId: c.dealership_id || c.dealershipId || null, duration: parseInt(c.duration || c.conversation_duration || c.conversationDuration, 10) || 0, outcome: c.outcome || 'UNANSWERED', call_at: c.call_at || c.created_at || new Date().toISOString(), cost: parseFloat(c.cost) || 0, transcript: c.transcript || '' }); }
+function nc(c) { return Object.assign({}, c, { callerName: c.caller_name || c.callerName || '', callerPhone: c.caller_phone || c.callerPhone || '', recordingUrl: c.recording_url || c.recordingUrl || null, dealershipId: c.dealership_id || c.dealershipId || null, duration: parseInt(c.duration, 10) || 0, outcome: c.outcome || 'UNANSWERED', call_at: c.call_at || c.created_at || new Date().toISOString(), cost: parseFloat(c.cost) || 0, transcript: c.transcript || '' }); }
 function nd(d) { return Object.assign({}, d, { isActive: d.is_active != null ? d.is_active : (d.isActive != null ? d.isActive : true), status: d.status || 'active', leads: parseInt(d.leads, 10) || 0, calls: parseInt(d.calls, 10) || 0, vehicles: parseInt(d.vehicles, 10) || 0, agent_id: d.agent_id || null, minute_limit: d.minute_limit || null, cycle_start_date: d.cycle_start_date || d.created_at || new Date().toISOString() }); } function nu(u) { return Object.assign({}, u, { dealershipId: u.dealership_id || u.dealershipId || null, name: u.name || u.email || '', role: u.role || 'CLIENT' }); }
 
 /* ── TOAST ────────────────────────────────────────────────────── */
@@ -136,10 +136,10 @@ function initApp() {
   });
   document.getElementById('sidebar-nav').innerHTML = navHtml;
   if (isAdmin) {
-    listenToDealerships(); listenToUsers(); listenToVehicles(null); listenToLeads(null); listenToCalls(null);
+    listenToDealerships(null); listenToUsers(); listenToVehicles(null); listenToLeads(null); listenToCalls(null);
   } else {
     if (u.dealershipId) {
-      listenToVehicles(u.dealershipId); listenToLeads(u.dealershipId); listenToCalls(u.dealershipId);
+      listenToDealerships(u.dealershipId); listenToVehicles(u.dealershipId); listenToLeads(u.dealershipId); listenToCalls(u.dealershipId);
     } else {
       console.warn('Orphaned client account - blocking data fetch.');
       STATE.vehicles = []; STATE.leads = []; STATE.calls = [];
@@ -151,74 +151,10 @@ function toggleSidebar() { var s = document.getElementById('sidebar'), o = docum
 function animateBars() { document.querySelectorAll('.progress-fill[data-w]').forEach(function (el) { el.style.width = el.getAttribute('data-w') + '%'; }); }
 
 /* ── LIVE DATA LISTENERS ──────────────────────────────────────── */
-async function listenToDealerships() { var c = getSB(); if (!c) return; var doFetch = async function () { var r = await c.from('dealerships').select('*').order('created_at', { ascending: false }); if (r.data) { STATE.dealerships = r.data.map(nd); var cp = STATE.currentPage; if (cp === 'dealerships') rerenderPage('dealerships'); if (cp === 'admin') rerenderPage('admin'); if (cp === 'analytics') rerenderPage('analytics'); } }; await doFetch(); c.channel('ch-deal').on('postgres_changes', { event: '*', schema: 'public', table: 'dealerships' }, doFetch).subscribe(); }
-async function listenToUsers() { var c = getSB(); if (!c) return; var doFetch = async function () { var r = await c.from('users').select('*').order('created_at', { ascending: false }); if (r.data) { STATE.users = r.data.map(nu); if (STATE.currentPage === 'all-users') rerenderPage('all-users'); } }; await doFetch(); c.channel('ch-users').on('postgres_changes', { event: '*', schema: 'public', table: 'users' }, doFetch).subscribe(); }
-/* ── BULLETPROOF LIVE DATA LISTENERS ── */
-
-async function listenToCalls(did) { 
-  var c = getSB(); if (!c) return; 
-  var doFetch = async function () { 
-    var q = c.from('calls').select('*').order('call_at', { ascending: false }); 
-    
-    // Attempt 1: Standard snake_case filter
-    var r = did ? await q.eq('dealership_id', did) : await q; 
-    
-    // Attempt 2: If the webhook used camelCase, fallback and retry
-    if (r.error && did) {
-       r = await c.from('calls').select('*').order('call_at', { ascending: false }).eq('dealershipId', did);
-    }
-
-    if (r.data) { 
-      STATE.calls = r.data.map(nc); 
-      var cp = STATE.currentPage; 
-      if (['calls', 'all-calls', 'dashboard', 'admin', 'dealer-detail', 'analytics'].includes(cp)) rerenderPage(cp); 
-    } else if (r.error) {
-      console.error("AI CRM Error loading calls:", r.error.message);
-    }
-  }; 
-  await doFetch(); 
-  c.channel('ch-call' + (did ? '-' + did : '')).on('postgres_changes', { event: '*', schema: 'public', table: 'calls' }, doFetch).subscribe(); 
-}
-
-async function listenToVehicles(did) { 
-  var c = getSB(); if (!c) return; 
-  var doFetch = async function () { 
-    var q = c.from('vehicles').select('*').order('created_at', { ascending: false }); 
-    var r = did ? await q.eq('dealership_id', did) : await q; 
-    
-    if (r.error && did) {
-       r = await c.from('vehicles').select('*').order('created_at', { ascending: false }).eq('dealershipId', did);
-    }
-
-    if (r.data) { 
-      STATE.vehicles = r.data.map(nv); 
-      var cp = STATE.currentPage; 
-      if (['cars', 'all-vehicles', 'dashboard', 'admin', 'dealer-detail', 'analytics'].includes(cp)) rerenderPage(cp); 
-    } 
-  }; 
-  await doFetch(); 
-  c.channel('ch-veh' + (did ? '-' + did : '')).on('postgres_changes', { event: '*', schema: 'public', table: 'vehicles' }, doFetch).subscribe(); 
-}
-
-async function listenToLeads(did) { 
-  var c = getSB(); if (!c) return; 
-  var doFetch = async function () { 
-    var q = c.from('leads').select('*').order('created_at', { ascending: false }); 
-    var r = did ? await q.eq('dealership_id', did) : await q; 
-    
-    if (r.error && did) {
-       r = await c.from('leads').select('*').order('created_at', { ascending: false }).eq('dealershipId', did);
-    }
-
-    if (r.data) { 
-      STATE.leads = r.data.map(nl); 
-      var cp = STATE.currentPage; 
-      if (['leads', 'all-leads', 'dashboard', 'admin', 'dealer-detail', 'analytics'].includes(cp)) rerenderPage(cp); 
-    } 
-  }; 
-  await doFetch(); 
-  c.channel('ch-lead' + (did ? '-' + did : '')).on('postgres_changes', { event: '*', schema: 'public', table: 'leads' }, doFetch).subscribe(); 
-}
+async function listenToDealerships(did) { var c = getSB(); if (!c) return; var doFetch = async function () { var q = c.from('dealerships').select('*').order('created_at', { ascending: false }); if (did) q = q.eq('id', did); var r = await q; if (r.data) { STATE.dealerships = r.data.map(nd); var cp = STATE.currentPage; if (cp === 'dealerships') rerenderPage('dealerships'); if (cp === 'admin') rerenderPage('admin'); if (cp === 'analytics') rerenderPage('analytics'); if (cp === 'dashboard') rerenderPage('dashboard'); } }; await doFetch(); c.channel('ch-deal').on('postgres_changes', { event: '*', schema: 'public', table: 'dealerships' }, doFetch).subscribe(); }async function listenToUsers() { var c = getSB(); if (!c) return; var doFetch = async function () { var r = await c.from('users').select('*').order('created_at', { ascending: false }); if (r.data) { STATE.users = r.data.map(nu); if (STATE.currentPage === 'all-users') rerenderPage('all-users'); } }; await doFetch(); c.channel('ch-users').on('postgres_changes', { event: '*', schema: 'public', table: 'users' }, doFetch).subscribe(); }
+async function listenToVehicles(did) { var c = getSB(); if (!c) return; var doFetch = async function () { var q = c.from('vehicles').select('*').order('created_at', { ascending: false }); if (did) q = q.eq('dealership_id', did); var r = await q; if (r.data) { STATE.vehicles = r.data.map(nv); var cp = STATE.currentPage; if (['cars', 'all-vehicles', 'dashboard', 'admin', 'dealer-detail', 'analytics'].includes(cp)) rerenderPage(cp); } }; await doFetch(); c.channel('ch-veh').on('postgres_changes', { event: '*', schema: 'public', table: 'vehicles' }, doFetch).subscribe(); }
+async function listenToLeads(did) { var c = getSB(); if (!c) return; var doFetch = async function () { var q = c.from('leads').select('*').order('created_at', { ascending: false }); if (did) q = q.eq('dealership_id', did); var r = await q; if (r.data) { STATE.leads = r.data.map(nl); var cp = STATE.currentPage; if (['leads', 'all-leads', 'dashboard', 'admin', 'dealer-detail', 'analytics'].includes(cp)) rerenderPage(cp); } }; await doFetch(); c.channel('ch-lead').on('postgres_changes', { event: '*', schema: 'public', table: 'leads' }, doFetch).subscribe(); }
+async function listenToCalls(did) { var c = getSB(); if (!c) return; var doFetch = async function () { var q = c.from('calls').select('*').order('call_at', { ascending: false }); if (did) q = q.eq('dealership_id', did); var r = await q; if (r.data) { STATE.calls = r.data.map(nc); var cp = STATE.currentPage; if (['calls', 'all-calls', 'dashboard', 'admin', 'dealer-detail', 'analytics'].includes(cp)) rerenderPage(cp); } }; await doFetch(); c.channel('ch-call').on('postgres_changes', { event: '*', schema: 'public', table: 'calls' }, doFetch).subscribe(); }
 
 /* ── NAVIGATION ───────────────────────────────────────────────── */
 var _renders = { dashboard: renderDashboard, cars: renderCars, leads: renderLeads, calls: renderCalls, admin: renderAdminOverview, dealerships: renderDealerships, analytics: renderAnalytics, recharge: renderRecharge, 'dealer-detail': renderDealerDetail, 'ai-assistant': renderAIAssistant, 'all-vehicles': renderAllVehicles, 'all-leads': renderAllLeads, 'all-calls': renderAllCalls, 'all-users': renderAllUsers };
