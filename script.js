@@ -396,8 +396,22 @@ function renderAdminOverview() {
   var totalCost = c.reduce(function (s, x) { return s + (x.cost || 0); }, 0);
   var totalDur = c.reduce(function (s, x) { return s + (x.duration || 0); }, 0);
   var costPerCall = c.length > 0 ? totalCost / c.length : 0;
-  var outcomes = { BOOKED_VISIT: 0, FOLLOW_UP: 0, NOT_INTERESTED: 0, UNANSWERED: 0 };
-  c.forEach(function (x) { outcomes[x.outcome] = (outcomes[x.outcome] || 0) + 1; });
+  var outcomes = { BOOKED_VISIT: 0, NOT_INTERESTED: 0, COMPLETED: 0, CALL_DISCONNECTED: 0 };
+  
+  c.forEach(function (x) { 
+    // Visit Date Rules
+    if (x.visit_date || x.visitDate) {
+        outcomes.BOOKED_VISIT++;
+    } else {
+        outcomes.NOT_INTERESTED++;
+    }
+    
+    // Status Rules (Counts Completed and Disconnected separately)
+    var o = String(x.outcome || '').toUpperCase();
+    if (o === 'COMPLETED') outcomes.COMPLETED++;
+    if (o === 'CALL_DISCONNECTED' || o === 'DISCONNECTED') outcomes.CALL_DISCONNECTED++;
+  });
+  
   var outMax = Math.max.apply(null, Object.values(outcomes)) || 1;
 
   // NEW: Calculate Usage & Trigger Limit Alerts for Admin
@@ -429,8 +443,19 @@ function renderAdminOverview() {
     '<div class="stat-card stat-duration clickable" onclick="showMetricDetail(\'duration\')" tabindex="0" role="button"><div style="display:flex;align-items:center;justify-content:space-between"><div class="stat-icon stat-icon-sky">' + icon('timer', 16) + '</div><div style="font-size:10px;color:var(--sky);opacity:.7">Click for breakdown →</div></div><div><div class="stat-value" style="font-size:15px;color:var(--sky)">' + fmtDurationFull(totalDur) + '</div><div class="stat-label">Total Call Duration</div><div class="stat-sub">' + c.length + ' calls total</div></div></div>' +
     '</div>' +
     '<div class="two-col" style="margin-bottom:20px">' +
-    '<div class="card card-p"><div class="section-title">' + icon('chart', 15) + ' Call Outcomes</div><div class="bar-chart">' +
-    Object.entries(outcomes).map(function (e) { var pct = Math.round((e[1] / outMax) * 100); var colors = { BOOKED_VISIT: 'var(--emerald)', FOLLOW_UP: 'var(--amber)', NOT_INTERESTED: 'var(--text-3)', UNANSWERED: 'var(--rose)' }; return '<div class="bar-col"><div class="bar-val">' + e[1] + '</div><div class="bar-fill" style="height:' + (pct || 4) + '%;background:' + colors[e[0]] + ';width:100%;border-radius:4px 4px 0 0"></div><div class="bar-label">' + outcomeLabel(e[0]).replace(' ', '\u00AD') + '</div></div>'; }).join('') +
+    '<div class="card card-p"><div class="section-title">' + icon('chart', 15) + ' Call Outcomes</div>' +
+    '<div class="bar-chart" style="height: 160px; display: flex; align-items: flex-end; justify-content: space-around; gap: 12px; padding-top: 20px;">' +
+    Object.entries(outcomes).map(function (e) { 
+        var pct = Math.round((e[1] / outMax) * 100); 
+        var colors = { BOOKED_VISIT: 'var(--emerald)', NOT_INTERESTED: 'var(--amber)', COMPLETED: 'var(--sky)', CALL_DISCONNECTED: 'var(--rose)' }; 
+        var labels = { BOOKED_VISIT: 'Booked Visit', NOT_INTERESTED: 'Not Interested', COMPLETED: 'Completed', CALL_DISCONNECTED: 'Disconnected' };
+        
+        return '<div class="bar-col" style="flex:1; display:flex; flex-direction:column; justify-content:flex-end; align-items:center; height:100%;">' +
+               '<div class="bar-val" style="margin-bottom:6px; font-size:12px; font-weight:700; color:var(--text-1);">' + e[1] + '</div>' +
+               '<div class="bar-fill" style="height:' + Math.max(pct, 2) + '%; background:' + colors[e[0]] + '; width:100%; max-width: 45px; border-radius:6px 6px 0 0; transition: height 0.8s ease-out;"></div>' +
+               '<div class="bar-label" style="margin-top:10px; font-size:11px; font-weight:500; color:var(--text-3); text-align:center;">' + labels[e[0]] + '</div>' +
+               '</div>'; 
+    }).join('') +
     '</div></div>' +
     '<div class="card card-p"><div class="section-title">' + icon('star', 15) + ' Top Dealerships</div>' +
     ([...d].sort(function (a, b) { return ((b.calls || 0) + (b.leads || 0)) - ((a.calls || 0) + (a.leads || 0)); }).slice(0, 5).map(function (x, i) { var medals = ['🥇', '🥈', '🥉']; return '<div class="activity-item" style="cursor:pointer;padding:10px 0;border-bottom:' + (i < 4 ? '1px solid var(--border-sub)' : 'none') + '" onclick="openDealerDetail(\'' + escQ(x.id) + '\')"><div style="display:flex;align-items:center;gap:10px;flex:1"><div style="font-size:15px;width:22px">' + (medals[i] || '<span style="font-size:12px;color:var(--text-3);font-weight:600">' + (i + 1) + '</span>') + '</div><div><div style="font-size:13px;font-weight:500;color:var(--text-1)">' + escH(x.name) + '</div><div style="font-size:11px;color:var(--text-3)">' + (x.calls || 0) + ' calls · ' + (x.leads || 0) + ' leads</div></div></div><span class="badge ' + planBadge(x.plan) + '">' + x.plan + '</span></div>'; }).join('')) || '<div class="empty-state" style="padding:20px">No dealerships yet</div>' +
