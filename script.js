@@ -23,7 +23,8 @@ var _aiLastCall = 0, AI_COOLDOWN_MS = 3000;
 var STATE = {
   currentUser: null, currentPage: 'dashboard', vehicles: [], leads: [], calls: [], dealerships: [], users: [], expandedRow: null, vehicleSearch: '', vehicleFilter: '', leadFilter: '', callFilter: '', dealerDetailId: null, dealerDetailTab: 'overview', aiMessages: [], aiTyping: false,
   adminVSearch: '', adminVDealer: '', adminLSearch: '', adminLDealer: '', adminLScore: '', adminCSearch: '', adminCDealer: '', adminCOut: '', adminUSearch: '', adminUDealer: '', dSearch: '', dStat: '', dPlan: '', detVSearch: '', detLSearch: '', detLScore: '', detCSearch: '', detCOut: '', detUSearch: '',
-  adminAnaDealer: '', aiDealerFilter: '', undoStack: [], redoStack: []
+  adminAnaDealer: '', aiDealerFilter: '', undoStack: [], redoStack: [],
+  clientLSearch: '', clientCSearch: ''
 };
 /* ── NAV DEFINITIONS ──────────────────────────────────────────── */
 var CLIENT_NAV = [{ id: 'dashboard', label: 'Overview', icon: 'dashboard' }, { id: 'cars', label: 'Car Catalogue', icon: 'car' }, { id: 'leads', label: 'Leads', icon: 'users' }, { id: 'calls', label: 'Call Logs', icon: 'phone' }];
@@ -120,8 +121,25 @@ async function handleLogin() {
 function resetLoginBtn() { var b = document.getElementById('login-btn'); if (!b) return; b.disabled = false; b.innerHTML = 'Sign in <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>'; }
 function showLoginError(msg) { document.getElementById('login-error-msg').textContent = sanitizeText(msg, 300); document.getElementById('login-error').classList.remove('hidden'); }
 function hideLoginError() { document.getElementById('login-error').classList.add('hidden'); }
-async function logout() { var c = getSB(); if (c) await c.auth.signOut().catch(function () { }); STATE.currentUser = null; STATE.vehicles = []; STATE.leads = []; STATE.calls = []; STATE.dealerships = []; STATE.users = []; STATE.aiMessages = []; STATE.aiTyping = false; document.getElementById('app').style.display = 'none'; document.getElementById('login-screen').style.display = 'flex'; document.getElementById('login-email').value = ''; document.getElementById('login-pass').value = ''; document.getElementById('login-pass').type = 'password'; document.getElementById('eye-show').style.display = 'block'; document.getElementById('eye-hide').style.display = 'none'; hideLoginError(); resetLoginBtn(); }
-
+async function logout() { 
+  var c = getSB(); 
+  if (c) {
+    c.removeAllChannels(); // Kills the ghost listeners to prevent data leaks
+    await c.auth.signOut().catch(function () { }); 
+  }
+  
+  STATE.currentUser = null; STATE.vehicles = []; STATE.leads = []; STATE.calls = []; STATE.dealerships = []; STATE.users = []; STATE.aiMessages = []; STATE.aiTyping = false; STATE.vehicleSearch = ''; STATE.vehicleFilter = ''; STATE.leadFilter = ''; STATE.callFilter = ''; STATE.clientLSearch = ''; STATE.clientCSearch = ''; STATE.adminVSearch = ''; STATE.adminVDealer = ''; STATE.adminLSearch = ''; STATE.adminLDealer = ''; STATE.adminLScore = ''; STATE.adminCSearch = ''; STATE.adminCDealer = ''; STATE.adminCOut = ''; STATE.dSearch = ''; STATE.dStat = ''; STATE.dPlan = ''; STATE.adminAnaDealer = ''; STATE.aiDealerFilter = ''; STATE.undoStack = []; STATE.redoStack = []; 
+  
+  document.getElementById('app').style.display = 'none'; 
+  document.getElementById('login-screen').style.display = 'flex'; 
+  document.getElementById('login-email').value = ''; 
+  document.getElementById('login-pass').value = ''; 
+  document.getElementById('login-pass').type = 'password'; 
+  document.getElementById('eye-show').style.display = 'block'; 
+  document.getElementById('eye-hide').style.display = 'none'; 
+  hideLoginError(); 
+  resetLoginBtn(); 
+}
 /* ── APP INIT ─────────────────────────────────────────────────── */
 function initApp() {
   var u = STATE.currentUser, isAdmin = u.role === 'ADMIN';
@@ -189,8 +207,35 @@ function navigate(pageId) {
 function rerenderPage(pageId) {
   var p = document.getElementById('page-' + pageId);
   if (p && p.classList.contains('active') && _renders[pageId]) {
-    p.innerHTML = _renders[pageId]();
-    setTimeout(animateBars, 50);
+    
+    // 1. Capture current focus and cursor position
+    var activeEl = document.activeElement;
+    var isInput = activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA');
+    // Find the element by ID or its placeholder text so we can find it after the render
+    var selector = isInput ? (activeEl.id ? '#' + activeEl.id : (activeEl.placeholder ? '[placeholder="' + activeEl.placeholder + '"]' : null)) : null;
+    var cursorPos = isInput ? activeEl.selectionStart : null;
+
+    var result = _renders[pageId]();
+
+    // 2. Helper to restore focus
+    var restoreFocus = function() {
+      if (selector) {
+        var el = p.querySelector(selector);
+        if (el) {
+          el.focus();
+          try { if (cursorPos !== null) el.setSelectionRange(cursorPos, cursorPos); } catch(e){}
+        }
+      }
+      setTimeout(animateBars, 50);
+    };
+
+    // 3. Render and trigger focus restore
+    if (result instanceof Promise) {
+      result.then(function (html) { if (html) p.innerHTML = html; restoreFocus(); });
+    } else {
+      p.innerHTML = result;
+      restoreFocus();
+    }
   }
 }
 /* ══════════════════════════════════════════════════════════════
@@ -230,15 +275,35 @@ async function autoSuspendCheck(d, stats) {
 }
 
 /* ── CLIENT: DASHBOARD ────────────────────────────────────────── */
+/* Helper: compute lead completeness score for auto-scoring */
+function computeLeadScore(lead) {
+  var fields = [lead.customerName, lead.phoneNumber, lead.carInterested, lead.visitDate, lead.callSummary];
+  var filled = fields.filter(function (f) { return f && String(f).trim().length > 0; }).length;
+  if (filled >= 4) return 'HOT';   // 4-5 fields filled = perfectly completed
+  if (filled >= 2) return 'WARM';  // 2-3 fields = some details missing
+  return 'COLD';                    // 0-1 fields = very few details
+}
+
 function renderDashboard() {
   var v = STATE.vehicles, l = STATE.leads, c = STATE.calls;
   var avail = v.filter(function (x) { return x.isAvailable; }).length;
-  var booked = c.filter(function (x) { return x.outcome === 'BOOKED_VISIT'; }).length;
-  var hot = l.filter(function (x) { return x.score === 'HOT'; }).length;
+  // Booked Visit = leads where visit_date is provided
+  var booked = l.filter(function (x) { return !!(x.visitDate || x.visit_date); }).length;
+  // Auto-compute scores based on lead completeness
+  var hot = l.filter(function (x) { return computeLeadScore(x) === 'HOT'; }).length;
   var totalVal = v.reduce(function (s, x) { return s + (x.price || 0); }, 0);
   var totalDur = c.reduce(function (s, x) { return s + (x.duration || 0); }, 0);
-  var outcomes = { BOOKED_VISIT: 0, FOLLOW_UP: 0, NOT_INTERESTED: 0, UNANSWERED: 0 };
-  c.forEach(function (x) { outcomes[x.outcome] = (outcomes[x.outcome] || 0) + 1; });
+  // Call Outcomes chart (same logic as admin)
+  var outcomes = { BOOKED_VISIT: 0, UNCOMPLETED: 0, COMPLETED: 0, CALL_DISCONNECTED: 0 };
+  l.forEach(function (lead) {
+    if (!!(lead.visitDate || lead.visit_date)) { outcomes.BOOKED_VISIT++; }
+    else { outcomes.UNCOMPLETED++; }
+  });
+  c.forEach(function (x) {
+    var o = String(x.outcome || '').toUpperCase();
+    if (o === 'CALL_DISCONNECTED' || o === 'DISCONNECTED' || o === 'UNANSWERED') { outcomes.CALL_DISCONNECTED++; }
+    else if (x.callerName && x.callerPhone && (x.duration || 0) > 0) { outcomes.COMPLETED++; }
+  });
   var outMax = Math.max.apply(null, Object.values(outcomes)) || 1;
 
   // NEW: Calculate Usage & Trigger Limit Alerts for Client
@@ -246,7 +311,7 @@ function renderDashboard() {
   var myDealer = STATE.dealerships.find(function (x) { return x.id === STATE.currentUser.dealershipId; });
   if (myDealer && myDealer.minute_limit) {
     var stats = getDealerStats(myDealer, c);
-    autoSuspendCheck(myDealer, stats); // Auto-deactivates them if they are over limits!
+    autoSuspendCheck(myDealer, stats).catch(function() {}); // Fire and forget safely
     if (stats.isExpired) {
       limitAlert = '<div class="alert alert-error" style="margin-bottom:20px;font-size:14px">🚨 <b>CRITICAL:</b> Billing limit reached (' + stats.usedMin.toFixed(3) + ' / ' + stats.limit + ' min, ' + stats.daysLeft + ' days left). AI is paused. Contact Admin to recharge.</div>';
     } else if (stats.usedMin >= stats.limit * 0.85 || stats.daysLeft <= 5) {
@@ -260,8 +325,8 @@ function renderDashboard() {
     mkStatCard('car', 'Total Vehicles', v.length, avail + ' available', false, "STATE.vehicleFilter='';navigate('cars')", 'View vehicles') +
     mkStatCard('users', 'Total Leads', l.length, hot + ' hot leads', false, "STATE.leadFilter='';navigate('leads')", 'View leads') +
     mkStatCard('flame', 'Hot Leads', hot, '', true, "STATE.leadFilter='HOT';navigate('leads')", 'View hot leads') +
-    mkStatCard('phone', 'Total Calls', c.length, booked + ' booked', false, "STATE.callFilter='';navigate('calls')", 'View calls') +
-    mkStatCard('check', 'Booked Visits', booked, 'from calls', false, "STATE.callFilter='BOOKED_VISIT';navigate('calls')", 'View booked') +
+    mkStatCard('phone', 'Total Calls', c.length, '', false, "STATE.clientCSearch='';navigate('calls')", 'View calls') +
+    mkStatCard('check', 'Booked Visits', booked, 'visit date provided', false, "STATE.leadFilter='';navigate('leads')", 'View leads with visit') +
     '</div>' +
     '<div class="stats-grid" style="grid-template-columns:repeat(2,1fr);margin-top:-10px;margin-bottom:28px">' +
     '<div class="stat-card stat-balance clickable" onclick="showMetricDetail(\'balance\')" tabindex="0" role="button">' +
@@ -280,11 +345,33 @@ function renderDashboard() {
     '</div>' +
     '</div>' +
     '<div class="two-col">' +
-    '<div class="card card-p"><div class="section-title">' + icon('chart', 15) + ' Call Outcomes</div><div class="bar-chart">' +
-    Object.entries(outcomes).map(function (e) { var pct = Math.round((e[1] / outMax) * 100); var colors = { BOOKED_VISIT: 'var(--emerald)', FOLLOW_UP: 'var(--amber)', NOT_INTERESTED: 'var(--text-3)', UNANSWERED: 'var(--rose)' }; return '<div class="bar-col"><div class="bar-val">' + e[1] + '</div><div class="bar-fill" style="height:' + (pct || 4) + '%;background:' + colors[e[0]] + ';width:100%;border-radius:4px 4px 0 0"></div><div class="bar-label">' + outcomeLabel(e[0]).replace(' ', '\u00AD') + '</div></div>'; }).join('') +
+    '<div class="card card-p"><div class="section-title">' + icon('chart', 15) + ' Call Outcomes</div>' +
+    '<div style="display:flex;align-items:flex-end;justify-content:space-around;gap:8px;height:150px;padding:10px 0 0;">' +
+    (function () {
+      var colors = { BOOKED_VISIT: 'var(--emerald)', UNCOMPLETED: 'var(--amber)', COMPLETED: 'var(--sky)', CALL_DISCONNECTED: 'var(--rose)' };
+      var labels = { BOOKED_VISIT: 'Booked Visit', UNCOMPLETED: 'Uncompleted', COMPLETED: 'Completed', CALL_DISCONNECTED: 'Disconnected' };
+      return Object.entries(outcomes).map(function (e) {
+        var pct = outMax > 0 ? Math.round((e[1] / outMax) * 100) : 0;
+        var barH = Math.max(pct, 2);
+        return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;">' +
+          '<div style="font-size:12px;font-weight:700;color:var(--text-1);margin-bottom:5px;">' + e[1] + '</div>' +
+          '<div style="width:36px;height:' + barH + '%;background:' + (colors[e[0]] || 'var(--text-3)') + ';border-radius:6px 6px 0 0;min-height:4px;transition:height 0.8s;"></div>' +
+          '<div style="font-size:10px;color:var(--text-3);margin-top:8px;text-align:center;">' + (labels[e[0]] || e[0]) + '</div>' +
+          '</div>';
+      }).join('');
+    })() +
     '</div></div>' +
     '<div class="card card-p"><div class="section-title">' + icon('trending', 15) + ' Lead Score Breakdown</div>' +
-    [['HOT', '#f87171', 'flame'], ['WARM', 'var(--amber)', 'phone'], ['COLD', 'var(--sky)', 'snowflake']].map(function (sc) { var cnt = l.filter(function (x) { return x.score === sc[0]; }).length; var pct = l.length > 0 ? Math.round(cnt / l.length * 100) : 0; return '<div class="progress-row"><div class="progress-info"><span style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-2)">' + icon(sc[2], 12) + ' ' + sc[0] + '</span><span style="font-size:12px;color:var(--text-3)">' + cnt + ' (' + pct + '%)</span></div><div class="progress-bar"><div class="progress-fill" data-w="' + pct + '" style="width:0;background:' + sc[1] + '"></div></div></div>'; }).join('') +
+    (function () {
+      // Compute score based on completeness
+      var hotCnt = l.filter(function (x) { return computeLeadScore(x) === 'HOT'; }).length;
+      var warmCnt = l.filter(function (x) { return computeLeadScore(x) === 'WARM'; }).length;
+      var coldCnt = l.filter(function (x) { return computeLeadScore(x) === 'COLD'; }).length;
+      return [['HOT', hotCnt, '#f87171', 'flame'], ['WARM', warmCnt, 'var(--amber)', 'phone'], ['COLD', coldCnt, 'var(--sky)', 'snowflake']].map(function (sc) {
+        var pct = l.length > 0 ? Math.round(sc[1] / l.length * 100) : 0;
+        return '<div class="progress-row"><div class="progress-info"><span style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-2)">' + icon(sc[3], 12) + ' ' + sc[0] + '</span><span style="font-size:12px;color:var(--text-3)">' + sc[1] + ' (' + pct + '%)</span></div><div class="progress-bar"><div class="progress-fill" data-w="' + pct + '" style="width:0;background:' + sc[2] + '"></div></div></div>';
+      }).join('');
+    })() +
     '</div>' +
     '</div>';
 }
@@ -321,64 +408,158 @@ function renderCars() {
 
 /* ── CLIENT: LEADS ────────────────────────────────────────────── */
 function renderLeads() {
-  var filtered = STATE.leads;
-  if (STATE.leadFilter) filtered = filtered.filter(function (l) { return l.score === STATE.leadFilter; });
+  var ls = (STATE.clientLSearch || '').toLowerCase();
+  var filtered = STATE.leads.filter(function (l) {
+    var autoScore = computeLeadScore(l);
+    var lms = !ls || (l.customerName || '').toLowerCase().includes(ls) || (l.phoneNumber || '').toLowerCase().includes(ls) || (l.carInterested || '').toLowerCase().includes(ls);
+    var lmf = !STATE.leadFilter || autoScore === STATE.leadFilter;
+    return lms && lmf;
+  });
   return '<div class="page-header-row"><div><div class="page-title font-display">Leads</div><div class="page-sub">' + STATE.leads.length + ' total leads</div></div><button onclick="openLeadModal()" class="btn btn-primary">' + icon('plus', 15) + ' Add Lead</button></div>' +
     '<div class="filters-bar">' +
-    '<button class="pill-filter' + (!STATE.leadFilter ? ' active' : '') + '" onclick="STATE.leadFilter=\'\';rerenderPage(\'leads\')">All</button>' +
-    '<button class="pill-filter' + (STATE.leadFilter === 'HOT' ? ' active' : '') + '" onclick="STATE.leadFilter=\'HOT\';rerenderPage(\'leads\')">🔥 Hot</button>' +
-    '<button class="pill-filter' + (STATE.leadFilter === 'WARM' ? ' active' : '') + '" onclick="STATE.leadFilter=\'WARM\';rerenderPage(\'leads\')">WARM</button>' +
-    '<button class="pill-filter' + (STATE.leadFilter === 'COLD' ? ' active' : '') + '" onclick="STATE.leadFilter=\'COLD\';rerenderPage(\'leads\')">COLD</button></div>' +
+    '<div style="position:relative;flex:1;min-width:180px"><div style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-3);pointer-events:none">' + icon('search', 14) + '</div><input class="input" style="padding-left:38px" placeholder="Search name, phone, car..." value="' + escH(STATE.clientLSearch) + '" oninput="STATE.clientLSearch=this.value;rerenderPage(\'leads\')" maxlength="100"></div>' +
+    '<button class="pill-filter' + (!STATE.leadFilter ? ' active' : '') + '" onclick="STATE.leadFilter=\'\';rerenderPage(\'leads\')" title="All leads">All</button>' +
+    '<button class="pill-filter' + (STATE.leadFilter === 'HOT' ? ' active' : '') + '" onclick="STATE.leadFilter=\'HOT\';rerenderPage(\'leads\')" title="All details filled">🔥 Hot</button>' +
+    '<button class="pill-filter' + (STATE.leadFilter === 'WARM' ? ' active' : '') + '" onclick="STATE.leadFilter=\'WARM\';rerenderPage(\'leads\')" title="Some details missing">WARM</button>' +
+    '<button class="pill-filter' + (STATE.leadFilter === 'COLD' ? ' active' : '') + '" onclick="STATE.leadFilter=\'COLD\';rerenderPage(\'leads\')" title="Minimal details">COLD</button></div>' +
     '<div class="card" style="overflow:hidden"><div style="overflow-x:auto"><table><thead><tr>' +
     '<th class="table-th table-th-num">#</th><th class="table-th">Customer Name</th><th class="table-th">Phone Number</th><th class="table-th">Car Interested</th><th class="table-th">Visit Date</th><th class="table-th">Added</th><th class="table-th">Score</th><th class="table-th"></th>' +
     '</tr></thead><tbody>' +
     (filtered.length === 0 ? '<tr><td colspan="8"><div class="empty-state">' + icon('users', 28) + '<br>No leads found</div></td></tr>' :
       filtered.map(function (l, i) {
+        var autoScore = computeLeadScore(l);
         return '<tr>' +
           '<td class="table-td-num">' + (i + 1) + '</td>' +
           '<td class="table-td"><span style="color:var(--text-1);font-weight:500">' + escH(l.customerName) + '</span></td>' +
           '<td class="table-td">' + escH(l.phoneNumber) + '</td>' +
           '<td class="table-td">' + escH(l.carInterested || '–') + '</td>' +
-          '<td class="table-td">' + (l.visitDate ? fmtDateShort(l.visitDate) : '–') + '</td>' +
+          '<td class="table-td">' + (l.visitDate ? '<span style="color:var(--emerald);font-size:12px;font-weight:500">' + fmtDateShort(l.visitDate) + '</span>' : '<span style="color:var(--text-3)">–</span>') + '</td>' +
           '<td class="table-td" style="font-size:12px;color:var(--text-3)">' + fmtDateShort(l.created_at) + '</td>' +
-          '<td class="table-td">' + (l.score ? '<span class="badge ' + scoreBadge(l.score) + '">' + l.score + '</span>' : '–') + '</td>' +
+          '<td class="table-td"><span class="badge ' + scoreBadge(autoScore) + '">' + autoScore + '</span></td>' +
           '<td class="table-td"><div style="display:flex;gap:4px">' +
-          '<button onclick="editLeadModal(\'' + escQ(l.id) + '\')" class="btn btn-ghost btn-icon" title="Edit">' + icon('pencil', 14) + '</button>' +
-          '<button onclick="promptDelete(\'lead\', \'' + escQ(l.id) + '\')" class="btn btn-ghost btn-icon" style="color:var(--text-3)" title="Delete" onmouseover="this.style.color=\'var(--rose)\'" onmouseout="this.style.color=\'var(--text-3)\'">' + icon('trash', 14) + '</button>' +
+          '<button onclick="editLeadModal(\'' + escQ(String(l.id)) + '\')" class="btn btn-ghost btn-icon" title="Edit">' + icon('pencil', 14) + '</button>' +
+          '<button onclick="promptDelete(\'lead\', \'' + escQ(String(l.id)) + '\')" class="btn btn-ghost btn-icon" style="color:var(--text-3)" title="Delete" onmouseover="this.style.color=\'var(--rose)\'" onmouseout="this.style.color=\'var(--text-3)\'">' + icon('trash', 14) + '</button>' +
           '</div></td></tr>';
       }).join('')) +
     '</tbody></table></div></div>';
 }
+/* ── editLeadModal: opens pre-filled edit form for a lead ── */
+function editLeadModal(id) {
+  var l = STATE.leads.find(function (x) { return String(x.id) === String(id); });
+  if (!l) { showToast('Lead not found.', 'error'); return; }
+  openModal(
+    '<div class="modal-header-bar"><h2>Edit Lead</h2><button class="modal-close-btn" onclick="closeModalDirect()">✕</button></div>' +
+    '<div class="modal-body-inner">' +
+    '<div class="form-grid">' +
+    '<div class="form-group"><label>Customer Name <span class="req">*</span></label><input id="lName" class="form-input" maxlength="100" value="' + escH(l.customerName || '') + '" placeholder="e.g. John Doe"></div>' +
+    '<div class="form-group"><label>Phone Number <span class="req">*</span></label><input id="lPhone" class="form-input" maxlength="30" value="' + escH(l.phoneNumber || '') + '" placeholder="e.g. +91 99999 99999"></div>' +
+    '<div class="form-group"><label>Car Interested In</label><input id="lCar" class="form-input" maxlength="120" value="' + escH(l.carInterested || '') + '" placeholder="e.g. 2021 Toyota Camry"></div>' +
+    '<div class="form-group"><label>Visit Date</label><input id="lVisit" class="form-input" type="date" value="' + escH(l.visitDate ? String(l.visitDate).slice(0, 10) : '') + '"></div>' +
+    '</div>' +
+    '<div class="modal-actions"><button class="btn btn-secondary" onclick="closeModalDirect()">Cancel</button><button class="btn btn-primary" onclick="saveLead(\'' + escQ(String(l.id)) + '\', null)">Update Lead</button></div>' +
+    '</div>'
+  );
+}
 
 /* ── CLIENT: CALLS ────────────────────────────────────────────── */
 function renderCalls() {
-  var filtered = STATE.calls;
-  if (STATE.callFilter) filtered = filtered.filter(function (c) { return c.outcome === STATE.callFilter; });
+  var cs = (STATE.clientCSearch || '').toLowerCase();
+  var filtered = STATE.calls.filter(function (c) {
+    var ms = !cs || (c.callerName || '').toLowerCase().includes(cs) || (c.callerPhone || '').toLowerCase().includes(cs);
+    var mf = !STATE.callFilter || c.outcome === STATE.callFilter;
+    return ms && mf;
+  });
   var tDur = filtered.reduce(function (s, c) { return s + (c.duration || 0); }, 0);
   return '<div class="page-header-row"><div><div class="page-title font-display">Call Logs</div><div class="page-sub">' + STATE.calls.length + ' total calls</div></div>' +
     '<div style="display:flex;gap:8px;flex-wrap:wrap"><span style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.2);border-radius:6px;font-size:12px;color:var(--sky)">' + icon('timer', 12) + ' ' + fmtDurationFull(tDur) + '</span></div></div>' +
     '<div class="filters-bar">' +
+    '<div style="position:relative;flex:1;min-width:180px"><div style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-3);pointer-events:none">' + icon('search', 14) + '</div><input class="input" style="padding-left:38px" placeholder="Search caller name or phone..." value="' + escH(STATE.clientCSearch) + '" oninput="STATE.clientCSearch=this.value;rerenderPage(\'calls\')" maxlength="100"></div>' +
     '<button class="pill-filter' + (!STATE.callFilter ? ' active' : '') + '" onclick="STATE.callFilter=\'\';rerenderPage(\'calls\')">All</button>' +
     '<button class="pill-filter' + (STATE.callFilter === 'BOOKED_VISIT' ? ' active' : '') + '" onclick="STATE.callFilter=\'BOOKED_VISIT\';rerenderPage(\'calls\')">Booked</button>' +
     '<button class="pill-filter' + (STATE.callFilter === 'FOLLOW_UP' ? ' active' : '') + '" onclick="STATE.callFilter=\'FOLLOW_UP\';rerenderPage(\'calls\')">Follow-up</button>' +
     '<button class="pill-filter' + (STATE.callFilter === 'UNANSWERED' ? ' active' : '') + '" onclick="STATE.callFilter=\'UNANSWERED\';rerenderPage(\'calls\')">Unanswered</button>' +
     '<button class="pill-filter' + (STATE.callFilter === 'NOT_INTERESTED' ? ' active' : '') + '" onclick="STATE.callFilter=\'NOT_INTERESTED\';rerenderPage(\'calls\')">Not Interested</button></div>' +
     '<div class="card" style="overflow:hidden"><div style="overflow-x:auto"><table><thead><tr>' +
-    '<th class="table-th table-th-num">#</th><th class="table-th">Date &amp; Time</th><th class="table-th">Caller Name</th><th class="table-th">Caller Phone</th><th class="table-th">Duration</th><th class="table-th">Outcome</th><th class="table-th">Transcript</th>' +    '</tr></thead><tbody>' +
-    (filtered.length === 0 ? '<tr><td colspan="7"><div class="empty-state">' + icon('phone', 28) + '<br>No calls found</div></td></tr>' :      filtered.map(function (c, i) {
-        return '<tr>' +
-          '<td class="table-td-num">' + (i + 1) + '</td>' +
-          '<td class="table-td" style="font-size:12px;color:var(--text-3);white-space:nowrap">' + fmtDate(c.call_at) + '</td>' +
-          '<td class="table-td"><span style="color:var(--text-1);font-weight:500">' + escH(c.callerName || '–') + '</span></td>' +
-          '<td class="table-td">' + escH(c.callerPhone) + '</td>' +
-          '<td class="table-td">' + fmtDuration(c.duration) + '</td>' +
-          '<td class="table-td"><span class="badge ' + outcomeBadge(c.outcome) + '">' + outcomeLabel(c.outcome) + '</span></td>' +
-          '<td class="table-td">' + (c.transcript ? '<button onclick="showTranscript(\'' + escQ(c.id) + '\')" class="btn btn-ghost btn-sm" style="font-size:11px">' + icon('eye', 12) + ' View</button>' : '<span style="color:var(--text-3);font-size:12px">None</span>') + '</td>' +
-          '</tr>';
-      }).join('')) +
+    '<th class="table-th table-th-num">#</th><th class="table-th">Date &amp; Time</th><th class="table-th">Caller Name</th><th class="table-th">Caller Phone</th><th class="table-th">Duration</th><th class="table-th">Outcome</th></tr></thead><tbody>' +
+    (filtered.length === 0 ? '<tr><td colspan="6"><div class="empty-state">' + icon('phone', 28) + '<br>No calls found</div></td></tr>' : filtered.map(function (c, i) {
+      return '<tr>' +
+        '<td class="table-td-num">' + (i + 1) + '</td>' +
+        '<td class="table-td" style="font-size:12px;color:var(--text-3);white-space:nowrap">' + fmtDate(c.call_at) + '</td>' +
+        '<td class="table-td"><span style="color:var(--text-1);font-weight:500">' + escH(c.callerName || '–') + '</span></td>' +
+        '<td class="table-td">' + escH(c.callerPhone) + '</td>' +
+        '<td class="table-td">' + fmtDuration(c.duration) + '</td>' +
+        '<td class="table-td"><span class="badge ' + outcomeBadge(c.outcome) + '">' + outcomeLabel(c.outcome) + '</span></td>' +
+        '</tr>';
+    }).join('')) +
     '</tbody></table></div></div>';
 }
-function showTranscript(id) { var c = STATE.calls.find(function (x) { return String(x.id) === String(id); }); if (!c) return; document.getElementById('modal-container').innerHTML = '<div class="modal-bg" onclick="closeModal(event)"><div class="modal-card"><div class="modal-title font-display">Call Transcript</div><button class="modal-close" onclick="closeModalDirect()">' + icon('x', 16) + '</button><div style="margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap"><span style="font-size:13px;color:var(--text-2)">' + escH(c.callerName || c.callerPhone) + '</span><span class="badge ' + outcomeBadge(c.outcome) + '">' + outcomeLabel(c.outcome) + '</span><span style="font-size:12px;color:var(--text-3)">' + fmtDate(c.call_at) + ' · ' + fmtDuration(c.duration) + '</span></div><div class="transcript-box">' + escH(c.transcript) + '</div>' + (c.recordingUrl ? '<div style="margin-top:12px"><a href="' + escH(c.recordingUrl) + '" target="_blank" rel="noopener noreferrer" class="recording-link">' + icon('play', 14) + ' Play Recording</a></div>' : '') + '<div class="modal-footer"><button onclick="closeModalDirect()" class="btn btn-secondary">Close</button></div></div></div>'; }
+function showTranscript(id) {
+  var c = STATE.calls.find(function (x) { return String(x.id) === String(id); });
+  if (!c) return;
+  var isAdmin = STATE.currentUser && STATE.currentUser.role === 'ADMIN';
+  var recUrl = (c.recordingUrl || '').trim();
+  var validRec = isAdmin && recUrl && /^https:\/\//i.test(recUrl);
+  // Build recording section (admin only, https:// URL only)
+  var recHtml = '';
+  if (validRec) {
+    recHtml = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;padding:8px 10px;background:rgba(56,189,248,0.06);border:1px solid rgba(56,189,248,0.15);border-radius:8px;flex-wrap:wrap;">' +
+      '<span style="font-size:11px;font-weight:600;color:var(--sky);white-space:nowrap;">' + icon('play', 11) + ' Recording</span>' +
+      '<audio id="transcriptAudio" controls style="height:28px;max-width:260px;flex:1;min-width:140px;accent-color:var(--sky);" preload="none"></audio>' +
+      '<a href="' + escH(recUrl) + '" target="_blank" rel="noopener noreferrer" style="font-size:10px;color:var(--sky);white-space:nowrap;">&#x2197; Open</a>' +
+      '</div>';
+  }
+  document.getElementById('modal-container').innerHTML =
+    '<div class="modal-bg" onclick="closeModal(event)">' +
+    '<div class="modal-card">' +
+    '<div class="modal-title font-display">Call Transcript</div>' +
+    '<button class="modal-close" onclick="closeModalDirect()">' + icon('x', 16) + '</button>' +
+    '<div style="margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">' +
+    '<span style="font-size:13px;color:var(--text-2);font-weight:500">' + escH(c.callerName || c.callerPhone) + '</span>' +
+    '<span class="badge ' + outcomeBadge(c.outcome) + '">' + outcomeLabel(c.outcome) + '</span>' +
+    '<span style="font-size:12px;color:var(--text-3)">' + fmtDate(c.call_at) + ' \u00b7 ' + fmtDuration(c.duration) + '</span>' +
+    '</div>' +
+    recHtml +
+    '<div class="transcript-box">' + escH(c.transcript) + '</div>' +
+    '<div class="modal-footer"><button onclick="closeModalDirect()" class="btn btn-secondary">Close</button></div>' +
+    '</div></div>';
+  // Set audio src via DOM property — never via innerHTML (XSS prevention)
+  if (validRec) {
+    var audioEl = document.getElementById('transcriptAudio');
+    if (audioEl) { audioEl.src = recUrl; }
+  }
+}
+
+/* ── SECURE PLAY RECORDING (Admin only) ──────────────────────── */
+function playRecording(id) {
+  if (!STATE.currentUser || STATE.currentUser.role !== 'ADMIN') {
+    showToast('Unauthorized: Only admins can play recordings.', 'error');
+    return;
+  }
+  var call = STATE.calls.find(function (x) { return String(x.id) === String(id); });
+  if (!call) { showToast('Call not found.', 'error'); return; }
+  var url = call.recordingUrl || '';
+  // Security: only allow https:// URLs — block javascript:, data:, blob: etc.
+  if (!url || !/^https:\/\//i.test(url)) {
+    showToast('Recording URL is not available or invalid.', 'error');
+    return;
+  }
+  openModal(
+    '<div class="modal-header-bar"><h2>' + icon('play', 14) + ' Play Recording</h2><button class="modal-close-btn" onclick="closeModalDirect()">&#x2715;</button></div>' +
+    '<div class="modal-body-inner">' +
+    '<div style="margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">' +
+    '<span style="font-size:13px;color:var(--text-2);font-weight:500">' + escH(call.callerName || call.callerPhone) + '</span>' +
+    '<span class="badge ' + outcomeBadge(call.outcome) + '">' + outcomeLabel(call.outcome) + '</span>' +
+    '<span style="font-size:12px;color:var(--text-3)">' + fmtDate(call.call_at) + ' · ' + fmtDuration(call.duration) + '</span>' +
+    '</div>' +
+    '<audio controls style="width:100%;margin-top:8px;border-radius:8px;" preload="none"></audio>' +
+    '<div style="margin-top:10px;font-size:11px;color:var(--text-3)">If audio does not play, <a href="' + escH(url) + '" target="_blank" rel="noopener noreferrer" style="color:var(--sky)">open in new tab</a>.</div>' +
+    '<div class="modal-actions"><button class="btn btn-secondary" onclick="closeModalDirect()">Close</button></div>' +
+    '</div>'
+  );
+  // Set src via DOM (never via innerHTML) to prevent XSS
+  var audioEl = document.querySelector('#modal-container audio');
+  if (audioEl) { audioEl.src = url; }
+}
 /* ══════════════════════════════════════════════════════════════
    ADMIN PAGES
    ══════════════════════════════════════════════════════════════ */
@@ -389,29 +570,38 @@ function miniStat(val, label, color) { return '<div style="background:var(--bg-9
 function renderAdminOverview() {
   var d = STATE.dealerships, v = STATE.vehicles, l = STATE.leads, c = STATE.calls;
   var activeDealers = d.filter(function (x) { return x.isActive; }).length;
-  var hotLeads = l.filter(function (x) { return x.score === 'HOT'; }).length;
-  var booked = c.filter(function (x) { return x.outcome === 'BOOKED_VISIT'; }).length;
+  var hotLeads = l.filter(function (x) { return computeLeadScore(x) === 'HOT'; }).length;
+  // Booked = leads where visit_date is provided (consistent with client dashboard)
+  var booked = l.filter(function (x) { return !!(x.visitDate || x.visit_date); }).length;
   var availVehicles = v.filter(function (x) { return x.isAvailable; }).length;
   var totalBalance = v.reduce(function (s, x) { return s + (x.price || 0); }, 0);
   var totalCost = c.reduce(function (s, x) { return s + (x.cost || 0); }, 0);
   var totalDur = c.reduce(function (s, x) { return s + (x.duration || 0); }, 0);
   var costPerCall = c.length > 0 ? totalCost / c.length : 0;
-  var outcomes = { BOOKED_VISIT: 0, NOT_INTERESTED: 0, COMPLETED: 0, CALL_DISCONNECTED: 0 };
-  
-  c.forEach(function (x) { 
-    // Visit Date Rules
-    if (x.visit_date || x.visitDate) {
-        outcomes.BOOKED_VISIT++;
+  // Call Outcomes: based on lead visit_date and call outcome field
+  var outcomes = { BOOKED_VISIT: 0, UNCOMPLETED: 0, COMPLETED: 0, CALL_DISCONNECTED: 0 };
+
+  // Count leads with/without visit date for Booked/Uncompleted
+  STATE.leads.forEach(function (lead) {
+    var hasVisitDate = !!(lead.visitDate || lead.visit_date);
+    if (hasVisitDate) {
+      outcomes.BOOKED_VISIT++;
     } else {
-        outcomes.NOT_INTERESTED++;
+      outcomes.UNCOMPLETED++;
     }
-    
-    // Status Rules (Counts Completed and Disconnected separately)
-    var o = String(x.outcome || '').toUpperCase();
-    if (o === 'COMPLETED') outcomes.COMPLETED++;
-    if (o === 'CALL_DISCONNECTED' || o === 'DISCONNECTED') outcomes.CALL_DISCONNECTED++;
   });
-  
+
+  // Count calls: Completed = all details present (callerName, callerPhone, duration > 0, transcript)
+  // Disconnected = outcome is CALL_DISCONNECTED or DISCONNECTED
+  c.forEach(function (x) {
+    var o = String(x.outcome || '').toUpperCase();
+    if (o === 'CALL_DISCONNECTED' || o === 'DISCONNECTED' || o === 'UNANSWERED') {
+      outcomes.CALL_DISCONNECTED++;
+    } else if (x.callerName && x.callerPhone && (x.duration || 0) > 0) {
+      outcomes.COMPLETED++;
+    }
+  });
+
   var outMax = Math.max.apply(null, Object.values(outcomes)) || 1;
 
   // NEW: Calculate Usage & Trigger Limit Alerts for Admin
@@ -445,16 +635,17 @@ function renderAdminOverview() {
     '<div class="two-col" style="margin-bottom:20px">' +
     '<div class="card card-p"><div class="section-title">' + icon('chart', 15) + ' Call Outcomes</div>' +
     '<div class="bar-chart" style="height: 160px; display: flex; align-items: flex-end; justify-content: space-around; gap: 12px; padding-top: 20px;">' +
-    Object.entries(outcomes).map(function (e) { 
-        var pct = Math.round((e[1] / outMax) * 100); 
-        var colors = { BOOKED_VISIT: 'var(--emerald)', NOT_INTERESTED: 'var(--amber)', COMPLETED: 'var(--sky)', CALL_DISCONNECTED: 'var(--rose)' }; 
-        var labels = { BOOKED_VISIT: 'Booked Visit', NOT_INTERESTED: 'Not Interested', COMPLETED: 'Completed', CALL_DISCONNECTED: 'Disconnected' };
-        
-        return '<div class="bar-col" style="flex:1; display:flex; flex-direction:column; justify-content:flex-end; align-items:center; height:100%;">' +
-               '<div class="bar-val" style="margin-bottom:6px; font-size:12px; font-weight:700; color:var(--text-1);">' + e[1] + '</div>' +
-               '<div class="bar-fill" style="height:' + Math.max(pct, 2) + '%; background:' + colors[e[0]] + '; width:100%; max-width: 45px; border-radius:6px 6px 0 0; transition: height 0.8s ease-out;"></div>' +
-               '<div class="bar-label" style="margin-top:10px; font-size:11px; font-weight:500; color:var(--text-3); text-align:center;">' + labels[e[0]] + '</div>' +
-               '</div>'; 
+    Object.entries(outcomes).map(function (e) {
+      var pct = Math.round((e[1] / outMax) * 100);
+      var colors = { BOOKED_VISIT: 'var(--emerald)', UNCOMPLETED: 'var(--amber)', COMPLETED: 'var(--sky)', CALL_DISCONNECTED: 'var(--rose)' };
+      var labels = { BOOKED_VISIT: 'Booked Visit', UNCOMPLETED: 'Uncompleted', COMPLETED: 'Completed', CALL_DISCONNECTED: 'Disconnected' };
+      var barH = Math.max(pct, 2);
+
+      return '<div class="bar-col" style="flex:1; display:flex; flex-direction:column; justify-content:flex-end; align-items:center; height:100%;">' +
+        '<div class="bar-val" style="margin-bottom:6px; font-size:12px; font-weight:700; color:var(--text-1);">' + e[1] + '</div>' +
+        '<div style="height:' + barH + '%; background:' + (colors[e[0]] || 'var(--text-3)') + '; width:36px; max-width:45px; border-radius:6px 6px 0 0; transition: height 0.8s ease-out; min-height:4px;"></div>' +
+        '<div class="bar-label" style="margin-top:10px; font-size:11px; font-weight:500; color:var(--text-3); text-align:center;">' + (labels[e[0]] || e[0]) + '</div>' +
+        '</div>';
     }).join('') +
     '</div></div>' +
     '<div class="card card-p"><div class="section-title">' + icon('star', 15) + ' Top Dealerships</div>' +
@@ -504,7 +695,7 @@ function renderAllLeads() {
   var l = STATE.leads.filter(function (x) {
     var ms = !s || (x.customerName || '').toLowerCase().includes(s) || (x.phoneNumber || '').toLowerCase().includes(s);
     var md = !fD || x.dealershipId === fD;
-    var mSc = !fS || x.score === fS;
+    var mSc = !fS || computeLeadScore(x) === fS;
     return ms && md && mSc;
   });
   var dOpts = '<option value="">All Dealerships</option>' + d.map(function (dd) { return '<option value="' + escH(dd.id) + '" ' + (fD === dd.id ? 'selected' : '') + '>' + escH(dd.name) + '</option>'; }).join('');
@@ -513,14 +704,17 @@ function renderAllLeads() {
     '<select class="input" style="width:auto;min-width:160px" onchange="STATE.adminLDealer=this.value;rerenderPage(\'all-leads\')">' + dOpts + '</select>' +
     '<select class="input" style="width:auto;min-width:140px" onchange="STATE.adminLScore=this.value;rerenderPage(\'all-leads\')"><option value="">All Scores</option><option value="HOT" ' + (fS === 'HOT' ? 'selected' : '') + '>HOT</option><option value="WARM" ' + (fS === 'WARM' ? 'selected' : '') + '>WARM</option><option value="COLD" ' + (fS === 'COLD' ? 'selected' : '') + '>COLD</option></select></div>' +
     '<div class="card" style="overflow:hidden"><div style="overflow-x:auto"><table><thead><tr>' +
-    '<th class="table-th table-th-num">#</th><th class="table-th">Dealership</th><th class="table-th">Customer Name</th><th class="table-th">Phone Number</th><th class="table-th">Car Interested</th><th class="table-th">Score</th><th class="table-th">Added</th>' +
+    '<th class="table-th table-th-num">#</th><th class="table-th">Dealership</th><th class="table-th">Customer Name</th><th class="table-th">Phone Number</th><th class="table-th">Car Interested</th><th class="table-th">Visit Date</th><th class="table-th">Score</th><th class="table-th">Added</th>' +
     '</tr></thead><tbody>' +
-    (l.length === 0 ? '<tr><td colspan="7"><div class="empty-state">' + icon('users', 28) + '<br>No leads found</div></td></tr>' :
+    (l.length === 0 ? '<tr><td colspan="8"><div class="empty-state">' + icon('users', 28) + '<br>No leads found</div></td></tr>' :
       l.map(function (ll, i) {
-        var dealer = d.find(function (x) { return x.id === ll.dealershipId; }); return '<tr>' +
+        var dealer = d.find(function (x) { return x.id === ll.dealershipId; });
+        return '<tr>' +
           '<td class="table-td-num">' + (i + 1) + '</td><td class="table-td" style="font-size:12px;color:var(--text-3)">' + escH(dealer ? dealer.name : '–') + '</td>' +
           '<td class="table-td"><span style="color:var(--text-1);font-weight:500">' + escH(ll.customerName) + '</span></td><td class="table-td">' + escH(ll.phoneNumber) + '</td>' +
-          '<td class="table-td">' + escH(ll.carInterested || '–') + '</td><td class="table-td">' + (ll.score ? '<span class="badge ' + scoreBadge(ll.score) + '">' + ll.score + '</span>' : '–') + '</td>' +
+          '<td class="table-td">' + escH(ll.carInterested || '–') + '</td>' +
+          '<td class="table-td">' + (ll.visitDate ? '<span style="color:var(--emerald);font-weight:500">' + fmtDateShort(ll.visitDate) + '</span>' : '<span style="color:var(--text-3)">–</span>') + '</td>' +
+          '<td class="table-td">' + (ll.score ? '<span class="badge ' + scoreBadge(ll.score) + '">' + ll.score + '</span>' : '–') + '</td>' +
           '<td class="table-td" style="font-size:11px;color:var(--text-3)">' + fmtDateShort(ll.created_at) + '</td></tr>';
       }).join('')) +
     '</tbody></table></div></div>';
@@ -545,7 +739,7 @@ function renderAllCalls() {
     '<div class="card" style="overflow:hidden"><div style="overflow-x:auto"><table><thead><tr>' +
     '<th class="table-th table-th-num">#</th><th class="table-th">Dealership</th><th class="table-th">Call Time</th><th class="table-th">Caller Name</th><th class="table-th">Duration</th><th class="table-th">Outcome</th><th class="table-th">Cost</th><th class="table-th">Transcript</th>' +
     '</tr></thead><tbody>' +
-    (c.length === 0 ? '<tr><td colspan="8"><div class="empty-state">' + icon('phone', 28) + '<br>No calls found</div></td></tr>' :
+    (c.length === 0 ? '<tr><td colspan="9"><div class="empty-state">' + icon('phone', 28) + '<br>No calls found</div></td></tr>' :
       c.map(function (cc, i) {
         var dealer = d.find(function (x) { return x.id === cc.dealershipId; }); return '<tr>' +
           '<td class="table-td-num">' + (i + 1) + '</td><td class="table-td" style="font-size:12px;color:var(--text-3)">' + escH(dealer ? dealer.name : '–') + '</td>' +
@@ -588,44 +782,44 @@ function renderDealerships() {
   var d = STATE.dealerships.filter(function (dd) {
     var ms = !s || (dd.name || '').toLowerCase().includes(s) || (dd.id || '').toLowerCase().includes(s) || (dd.email || '').toLowerCase().includes(s);
     var mSt = !fS || (fS === 'active' ? dd.isActive : !dd.isActive);
-    var mPl = !fP || dd.plan === fP;
+    var mPl = !fP || String(dd.plan || '').toUpperCase() === fP.toUpperCase();
     return ms && mSt && mPl;
   });
 
   return '<div class="page-header-row"><div><div class="page-title font-display">Dealerships</div><div class="page-sub">' + d.length + ' registered accounts</div></div><button onclick="openDealershipModal()" class="btn btn-primary">' + icon('plus', 15) + ' Create Dealership</button></div>' +
     '<div class="filters-bar"><div style="position:relative;flex:1;min-width:180px"><div style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-3);pointer-events:none">' + icon('search', 14) + '</div><input class="input" style="padding-left:38px" placeholder="Search by name, email, or ID..." value="' + escH(STATE.dSearch) + '" oninput="STATE.dSearch=this.value;rerenderPage(\'dealerships\')" maxlength="100"></div>' +
     '<select class="input" style="width:auto;min-width:140px" onchange="STATE.dStat=this.value;rerenderPage(\'dealerships\')"><option value="">All Status</option><option value="active" ' + (fS === 'active' ? 'selected' : '') + '>Active</option><option value="suspended" ' + (fS === 'suspended' ? 'selected' : '') + '>Suspended</option></select>' +
-    '<select class="input" style="width:auto;min-width:140px" onchange="STATE.dPlan=this.value;rerenderPage(\'dealerships\')"><option value="">All Plans</option><option value="starter" ' + (fP === 'starter' ? 'selected' : '') + '>Starter</option><option value="pro" ' + (fP === 'pro' ? 'selected' : '') + '>Pro</option><option value="enterprise" ' + (fP === 'enterprise' ? 'selected' : '') + '>Enterprise</option></select></div>' +
+    '<select class="input" style="width:auto;min-width:140px" onchange="STATE.dPlan=this.value;rerenderPage(\'dealerships\')"><option value="">All Plans</option><option value="STARTER" ' + (fP === 'STARTER' ? 'selected' : '') + '>Starter</option><option value="GROWTH" ' + (fP === 'GROWTH' ? 'selected' : '') + '>Growth</option><option value="ENTERPRISE" ' + (fP === 'ENTERPRISE' ? 'selected' : '') + '>Enterprise</option></select></div>' +
     '<div class="card" style="overflow:hidden"><div style="overflow-x:auto"><table><thead><tr>' +
-'<th class="table-th table-th-num">#</th><th class="table-th">Dealership</th><th class="table-th">Status</th><th class="table-th">Days Left</th><th class="table-th">Vehicles</th><th class="table-th">Inv Value</th><th class="table-th">Leads</th><th class="table-th">Calls</th><th class="table-th">Call Cost</th><th class="table-th">Call Duration</th><th class="table-th">Actions</th>' +    '</tr></thead><tbody>' +
-(d.length === 0 ? '<tr><td colspan="11"><div class="empty-state">' + icon('building', 28) + '<br>No dealerships found</div></td></tr>' :      d.map(function (dd, i) {
-        // Admin specific stats calculations
-        var dV = STATE.vehicles.filter(function (v) { return v.dealershipId === dd.id; });
-        var dC = STATE.calls.filter(function (c) { return c.dealershipId === dd.id; });
-        var invVal = dV.reduce(function (sum, v) { return sum + (v.price || 0); }, 0);
-        var callCost = dC.reduce(function (sum, c) { return sum + (c.cost || 0); }, 0);
-        var callDur = dC.reduce(function (sum, c) { return sum + (c.duration || 0); }, 0);
-        
-        var stats = getDealerStats(dd, dC);
-        var daysColor = stats.daysLeft <= 5 ? 'color:var(--rose);font-weight:600' : 'color:var(--text-2)';
+    '<th class="table-th table-th-num">#</th><th class="table-th">Dealership</th><th class="table-th">Status</th><th class="table-th">Days Left</th><th class="table-th">Vehicles</th><th class="table-th">Inv Value</th><th class="table-th">Leads</th><th class="table-th">Calls</th><th class="table-th">Call Cost</th><th class="table-th">Call Duration</th><th class="table-th">Actions</th>' + '</tr></thead><tbody>' +
+    (d.length === 0 ? '<tr><td colspan="11"><div class="empty-state">' + icon('building', 28) + '<br>No dealerships found</div></td></tr>' : d.map(function (dd, i) {
+      // Admin specific stats calculations
+      var dV = STATE.vehicles.filter(function (v) { return v.dealershipId === dd.id; });
+      var dC = STATE.calls.filter(function (c) { return c.dealershipId === dd.id; });
+      var invVal = dV.reduce(function (sum, v) { return sum + (v.price || 0); }, 0);
+      var callCost = dC.reduce(function (sum, c) { return sum + (c.cost || 0); }, 0);
+      var callDur = dC.reduce(function (sum, c) { return sum + (c.duration || 0); }, 0);
 
-        return '<tr>' +
-          '<td class="table-td-num">' + (i + 1) + '</td>' +
-          '<td class="table-td"><div style="color:var(--text-1);font-weight:500;cursor:pointer;text-decoration:underline;text-underline-offset:3px;text-decoration-color:rgba(245,158,11,.3);margin-bottom:2px" onclick="openDealerDetail(\'' + escQ(dd.id) + '\')">' + escH(dd.name) + '</div><div style="color:var(--text-3);font-size:11px">' + escH(dd.email) + '</div></td>' +
-          '<td class="table-td"><span class="badge ' + (dd.isActive ? 'badge-success' : 'badge-danger') + '">' + (dd.isActive ? 'Active' : 'Suspended') + '</span></td>' +
-          '<td class="table-td" style="' + daysColor + '">' + stats.daysLeft + ' days</td>' +
-          '<td class="table-td">' + (dd.vehicles || 0) + '</td>' +
-          '<td class="table-td" style="color:var(--emerald);font-weight:500">' + fmt(invVal) + '</td>' +
-          '<td class="table-td">' + (dd.leads || 0) + '</td>' +
-          '<td class="table-td">' + (dd.calls || 0) + '</td>' +
-          '<td class="table-td"><span class="cost-badge">' + fmtCost(callCost) + '</span></td>' +
-          '<td class="table-td" style="color:var(--sky)">' + fmtDurationFull(callDur) + '</td>' +
-          '<td class="table-td"><div style="display:flex;gap:4px">' +
-          '<button onclick="openDealerDetail(\'' + escQ(dd.id) + '\')" class="btn btn-ghost btn-icon" style="color:var(--sky)">' + icon('eye', 14) + '</button>' +
-          '<button onclick="openDealershipModal(\'' + escQ(dd.id) + '\')" class="btn btn-ghost btn-icon">' + icon('pencil', 14) + '</button>' +
-          '<button onclick="toggleDealership(\'' + escQ(dd.id) + '\')" class="btn btn-ghost btn-icon" style="color:' + (dd.isActive ? 'var(--emerald)' : 'var(--text-3)') + '" title="' + (dd.isActive ? 'Turn Off' : 'Turn On') + '">' + icon(dd.isActive ? 'toggle_on' : 'toggle_off', 16) + '</button>' +
-          '</div></td></tr>';
-      }).join('')) +
+      var stats = getDealerStats(dd, dC);
+      var daysColor = stats.daysLeft <= 5 ? 'color:var(--rose);font-weight:600' : 'color:var(--text-2)';
+
+      return '<tr>' +
+        '<td class="table-td-num">' + (i + 1) + '</td>' +
+        '<td class="table-td"><div style="color:var(--text-1);font-weight:500;cursor:pointer;text-decoration:underline;text-underline-offset:3px;text-decoration-color:rgba(245,158,11,.3);margin-bottom:2px" onclick="openDealerDetail(\'' + escQ(dd.id) + '\')">' + escH(dd.name) + '</div><div style="color:var(--text-3);font-size:11px">' + escH(dd.email) + '</div></td>' +
+        '<td class="table-td"><span class="badge ' + (dd.isActive ? 'badge-success' : 'badge-danger') + '">' + (dd.isActive ? 'Active' : 'Suspended') + '</span></td>' +
+        '<td class="table-td" style="' + daysColor + '">' + stats.daysLeft + ' days</td>' +
+        '<td class="table-td">' + (dd.vehicles || 0) + '</td>' +
+        '<td class="table-td" style="color:var(--emerald);font-weight:500">' + fmt(invVal) + '</td>' +
+        '<td class="table-td">' + (dd.leads || 0) + '</td>' +
+        '<td class="table-td">' + (dd.calls || 0) + '</td>' +
+        '<td class="table-td"><span class="cost-badge">' + fmtCost(callCost) + '</span></td>' +
+        '<td class="table-td" style="color:var(--sky)">' + fmtDurationFull(callDur) + '</td>' +
+        '<td class="table-td"><div style="display:flex;gap:4px">' +
+        '<button onclick="openDealerDetail(\'' + escQ(dd.id) + '\')" class="btn btn-ghost btn-icon" style="color:var(--sky)">' + icon('eye', 14) + '</button>' +
+        '<button onclick="openDealershipModal(\'' + escQ(dd.id) + '\')" class="btn btn-ghost btn-icon">' + icon('pencil', 14) + '</button>' +
+        '<button onclick="toggleDealership(\'' + escQ(dd.id) + '\')" class="btn btn-ghost btn-icon" style="color:' + (dd.isActive ? 'var(--emerald)' : 'var(--text-3)') + '" title="' + (dd.isActive ? 'Turn Off' : 'Turn On') + '">' + icon(dd.isActive ? 'toggle_on' : 'toggle_off', 16) + '</button>' +
+        '</div></td></tr>';
+    }).join('')) +
     '</tbody></table></div></div>';
 }
 
@@ -649,7 +843,7 @@ function renderDealerDetail() {
     '<div class="dealer-detail-header"><div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:16px">' +
     '<div style="display:flex;align-items:center;gap:16px"><div style="width:52px;height:52px;border-radius:12px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.2);display:flex;align-items:center;justify-content:center;font-family:\'Syne\',sans-serif;font-weight:700;font-size:18px;color:var(--amber)">' + escH((d.name || '?').slice(0, 2).toUpperCase()) + '</div>' +
     '<div><div style="font-family:\'Syne\',sans-serif;font-weight:700;font-size:20px;color:var(--text-1)">' + escH(d.name) + '</div><div style="font-size:13px;color:var(--text-3);margin-top:4px;display:flex;align-items:center;gap:12px"><span>' + escH(d.email) + '</span>' + (d.phone ? '<span>' + escH(d.phone) + '</span>' : '') + '</div></div></div>' +
-'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span class="badge ' + planBadge(d.plan) + '">' + escH(d.plan || '–') + '</span><span class="badge ' + (d.isActive ? 'badge-success' : 'badge-danger') + '">' + (d.isActive ? 'Active' : 'Suspended') + '</span><span class="badge ' + (stats.daysLeft <= 5 ? 'badge-danger' : 'badge-neutral') + '">' + stats.daysLeft + ' Days Left</span>' +    '<button onclick="openDealershipModal(\'' + escQ(d.id) + '\')" class="btn btn-secondary btn-sm">' + icon('pencil', 13) + ' Edit</button>' +
+    '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span class="badge ' + planBadge(d.plan) + '">' + escH(d.plan || '–') + '</span><span class="badge ' + (d.isActive ? 'badge-success' : 'badge-danger') + '">' + (d.isActive ? 'Active' : 'Suspended') + '</span><span class="badge ' + (stats.daysLeft <= 5 ? 'badge-danger' : 'badge-neutral') + '">' + stats.daysLeft + ' Days Left</span>' + '<button onclick="openDealershipModal(\'' + escQ(d.id) + '\')" class="btn btn-secondary btn-sm">' + icon('pencil', 13) + ' Edit</button>' +
     '<button onclick="toggleDealership(\'' + escQ(d.id) + '\')" class="btn ' + (d.isActive ? 'btn-danger' : 'btn-success') + ' btn-sm">' + (d.isActive ? 'Suspend' : 'Activate') + '</button></div>' +
     '</div>' +
     '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:12px;margin-top:20px">' +
@@ -660,15 +854,38 @@ function renderDealerDetail() {
   var tabBar = '<div class="tab-bar">' + tabs.map(function (t) { return '<button class="tab-btn' + (tab === t.id ? ' active' : '') + '" onclick="STATE.dealerDetailTab=\'' + escQ(t.id) + '\';rerenderDealerDetail()">' + t.label + '</button>'; }).join('') + '</div>';
   var tabContent = '';
   if (tab === 'overview') {
-    var outcomes = { BOOKED_VISIT: 0, FOLLOW_UP: 0, NOT_INTERESTED: 0, UNANSWERED: 0 };
-    dC.forEach(function (c) { outcomes[c.outcome] = (outcomes[c.outcome] || 0) + 1; });
-    var outMax = Math.max.apply(null, Object.values(outcomes)) || 1;
+    // Call Outcomes: same logic as admin/client dashboard
+    var dtOutcomes = { BOOKED_VISIT: 0, UNCOMPLETED: 0, COMPLETED: 0, CALL_DISCONNECTED: 0 };
+    dL.forEach(function (lead) {
+      if (!!(lead.visitDate || lead.visit_date)) { dtOutcomes.BOOKED_VISIT++; } else { dtOutcomes.UNCOMPLETED++; }
+    });
+    dC.forEach(function (x) {
+      var o = String(x.outcome || '').toUpperCase();
+      if (o === 'CALL_DISCONNECTED' || o === 'DISCONNECTED' || o === 'UNANSWERED') { dtOutcomes.CALL_DISCONNECTED++; }
+      else if (x.callerName && x.callerPhone && (x.duration || 0) > 0) { dtOutcomes.COMPLETED++; }
+    });
+    var dtOutMax = Math.max.apply(null, Object.values(dtOutcomes)) || 1;
+    var dtColors = { BOOKED_VISIT: 'var(--emerald)', UNCOMPLETED: 'var(--amber)', COMPLETED: 'var(--sky)', CALL_DISCONNECTED: 'var(--rose)' };
+    var dtLabels = { BOOKED_VISIT: 'Booked Visit', UNCOMPLETED: 'Uncompleted', COMPLETED: 'Completed', CALL_DISCONNECTED: 'Disconnected' };
+    // Lead scores using computeLeadScore for consistency
+    var dtHot = dL.filter(function (l) { return computeLeadScore(l) === 'HOT'; }).length;
+    var dtWarm = dL.filter(function (l) { return computeLeadScore(l) === 'WARM'; }).length;
+    var dtCold = dL.filter(function (l) { return computeLeadScore(l) === 'COLD'; }).length;
     tabContent = '<div class="two-col">' +
-      '<div class="card card-p"><div class="section-title">' + icon('phone', 15) + ' Call Outcomes</div><div class="bar-chart" style="height:100px">' +
-      Object.entries(outcomes).map(function (e) { var pct = Math.round((e[1] / outMax) * 100); var colors = { BOOKED_VISIT: 'var(--emerald)', FOLLOW_UP: 'var(--amber)', NOT_INTERESTED: 'var(--text-3)', UNANSWERED: 'var(--rose)' }; return '<div class="bar-col"><div class="bar-val">' + e[1] + '</div><div class="bar-fill" style="height:' + (pct || 4) + '%;background:' + colors[e[0]] + ';width:100%;border-radius:4px 4px 0 0"></div><div class="bar-label">' + outcomeLabel(e[0]).replace(' ', '\u00AD') + '</div></div>'; }).join('') +
+      '<div class="card card-p"><div class="section-title">' + icon('phone', 15) + ' Call Outcomes</div>' +
+      '<div style="display:flex;align-items:flex-end;justify-content:space-around;gap:8px;height:120px;padding:10px 0 0;">' +
+      Object.entries(dtOutcomes).map(function (e) {
+        var pct = dtOutMax > 0 ? Math.round((e[1] / dtOutMax) * 100) : 0;
+        var barH = Math.max(pct, 2);
+        return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;">' +
+               '<div style="font-size:11px;font-weight:700;color:var(--text-1);margin-bottom:4px;">' + e[1] + '</div>' +
+               '<div style="width:28px;height:' + barH + '%;background:' + (dtColors[e[0]] || 'var(--text-3)') + ';border-radius:4px 4px 0 0;min-height:3px;"></div>' +
+               '<div style="font-size:9px;color:var(--text-3);margin-top:6px;text-align:center;">' + (dtLabels[e[0]] || e[0]) + '</div>' +
+               '</div>';
+      }).join('') +
       '</div></div>' +
       '<div class="card card-p"><div class="section-title">' + icon('trending', 15) + ' Lead Scores</div>' +
-      [['HOT', dL.filter(function (l) { return l.score === 'HOT'; }).length, '#f87171'], ['WARM', dL.filter(function (l) { return l.score === 'WARM'; }).length, 'var(--amber)'], ['COLD', dL.filter(function (l) { return l.score === 'COLD'; }).length, 'var(--sky)']].map(function (s) { var pct = dL.length > 0 ? Math.round(s[1] / dL.length * 100) : 0; return '<div class="progress-row"><div class="progress-info"><span style="font-size:13px;color:var(--text-2)">' + s[0] + '</span><span style="font-size:12px;color:var(--text-3)">' + s[1] + ' (' + pct + '%)</span></div><div class="progress-bar"><div class="progress-fill" data-w="' + pct + '" style="width:0;background:' + s[2] + '"></div></div></div>'; }).join('') +
+      [['HOT', dtHot, '#f87171'], ['WARM', dtWarm, 'var(--amber)'], ['COLD', dtCold, 'var(--sky)']].map(function (s) { var pct = dL.length > 0 ? Math.round(s[1] / dL.length * 100) : 0; return '<div class="progress-row"><div class="progress-info"><span style="font-size:13px;color:var(--text-2)">' + s[0] + '</span><span style="font-size:12px;color:var(--text-3)">' + s[1] + ' (' + pct + '%)</span></div><div class="progress-bar"><div class="progress-fill" data-w="' + pct + '" style="width:0;background:' + s[2] + '"></div></div></div>'; }).join('') +
       '</div></div>';
   } else if (tab === 'calls') { tabContent = renderDTCalls(dC); }
   else if (tab === 'leads') { tabContent = renderDTLeads(dL); }
@@ -682,13 +899,18 @@ function renderDTCalls(calls) {
   var c = calls.filter(function (x) { return (!s || (x.callerName || '').toLowerCase().includes(s) || (x.callerPhone || '').toLowerCase().includes(s)) && (!fO || x.outcome === fO); });
   var html = '<div class="filters-bar"><div style="position:relative;flex:1;min-width:180px"><div style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-3);pointer-events:none">' + icon('search', 14) + '</div><input class="input" style="padding-left:38px" placeholder="Search caller..." value="' + escH(STATE.detCSearch) + '" oninput="STATE.detCSearch=this.value;rerenderDealerDetail()" maxlength="100"></div><select class="input" style="width:auto;min-width:140px" onchange="STATE.detCOut=this.value;rerenderDealerDetail()"><option value="">All Outcomes</option><option value="BOOKED_VISIT" ' + (fO === 'BOOKED_VISIT' ? 'selected' : '') + '>Booked</option><option value="FOLLOW_UP" ' + (fO === 'FOLLOW_UP' ? 'selected' : '') + '>Follow Up</option><option value="UNANSWERED" ' + (fO === 'UNANSWERED' ? 'selected' : '') + '>Unanswered</option></select></div>';
   if (c.length === 0) return html + '<div class="empty-state">' + icon('phone', 28) + '<br>No calls found</div>';
-return html + '<div class="card" style="overflow:hidden"><div style="overflow-x:auto"><table><thead><tr><th class="table-th table-th-num">#</th><th class="table-th">Date</th><th class="table-th">Caller</th><th class="table-th">Duration</th><th class="table-th">Outcome</th><th class="table-th">Cost</th></tr></thead><tbody>' + c.map(function (cc, i) { return '<tr><td class="table-td-num">' + (i + 1) + '</td><td class="table-td" style="font-size:12px">' + fmtDate(cc.call_at) + '</td><td class="table-td"><div style="color:var(--text-1);font-weight:500">' + escH(cc.callerName || '–') + '</div><div style="font-size:11px;color:var(--text-3)">' + escH(cc.callerPhone) + '</div></td><td class="table-td">' + fmtDuration(cc.duration) + '</td><td class="table-td"><span class="badge ' + outcomeBadge(cc.outcome) + '">' + outcomeLabel(cc.outcome) + '</span></td><td class="table-td"><span class="cost-badge">' + fmtCost(cc.cost) + '</span></td></tr>'; }).join('') + '</tbody></table></div></div>';}
+  return html + '<div class="card" style="overflow:hidden"><div style="overflow-x:auto"><table><thead><tr><th class="table-th table-th-num">#</th><th class="table-th">Date</th><th class="table-th">Caller</th><th class="table-th">Duration</th><th class="table-th">Outcome</th><th class="table-th">Cost</th><th class="table-th">Transcript</th><th class="table-th">Recording</th></tr></thead><tbody>' + c.map(function (cc, i) { return '<tr><td class="table-td-num">' + (i + 1) + '</td><td class="table-td" style="font-size:12px">' + fmtDate(cc.call_at) + '</td><td class="table-td"><div style="color:var(--text-1);font-weight:500">' + escH(cc.callerName || '–') + '</div><div style="font-size:11px;color:var(--text-3)">' + escH(cc.callerPhone) + '</div></td><td class="table-td">' + fmtDuration(cc.duration) + '</td><td class="table-td"><span class="badge ' + outcomeBadge(cc.outcome) + '">' + outcomeLabel(cc.outcome) + '</span></td><td class="table-td"><span class="cost-badge">' + fmtCost(cc.cost) + '</span></td>' +
+        '<td class="table-td">' + (cc.transcript ? '<button onclick="showTranscript(\'' + escQ(cc.id) + '\')" class="btn btn-ghost btn-sm" style="font-size:11px">' + icon('eye', 12) + ' View</button>' : '<span style="color:var(--text-3);font-size:12px">None</span>') + '</td>' +
+        '<td class="table-td">' + (cc.recordingUrl ? '<button onclick="playRecording(\'' + escQ(cc.id) + '\')" class="btn btn-ghost btn-sm" style="font-size:11px;color:var(--sky)">' + icon('play', 12) + ' Play</button>' : '<span style="color:var(--text-3);font-size:12px">\u2013</span>') + '</td>' +
+        '</tr>';
+    }).join('') + '</tbody></table></div></div>';
+}
 function renderDTLeads(leads) {
   var s = (STATE.detLSearch || '').toLowerCase(), fS = STATE.detLScore || '';
   var l = leads.filter(function (x) { return (!s || (x.customerName || '').toLowerCase().includes(s) || (x.phoneNumber || '').toLowerCase().includes(s)) && (!fS || x.score === fS); });
   var html = '<div class="filters-bar"><div style="position:relative;flex:1;min-width:180px"><div style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-3);pointer-events:none">' + icon('search', 14) + '</div><input class="input" style="padding-left:38px" placeholder="Search name or phone..." value="' + escH(STATE.detLSearch) + '" oninput="STATE.detLSearch=this.value;rerenderDealerDetail()" maxlength="100"></div><select class="input" style="width:auto;min-width:140px" onchange="STATE.detLScore=this.value;rerenderDealerDetail()"><option value="">All Scores</option><option value="HOT" ' + (fS === 'HOT' ? 'selected' : '') + '>HOT</option><option value="WARM" ' + (fS === 'WARM' ? 'selected' : '') + '>WARM</option><option value="COLD" ' + (fS === 'COLD' ? 'selected' : '') + '>COLD</option></select></div>';
   if (l.length === 0) return html + '<div class="empty-state">' + icon('users', 28) + '<br>No leads found</div>';
-  return html + '<div class="card" style="overflow:hidden"><div style="overflow-x:auto"><table><thead><tr><th class="table-th table-th-num">#</th><th class="table-th">Customer</th><th class="table-th">Car Interested</th><th class="table-th">Score</th><th class="table-th">Added</th></tr></thead><tbody>' + l.map(function (ll, i) { return '<tr><td class="table-td-num">' + (i + 1) + '</td><td class="table-td"><div style="color:var(--text-1);font-weight:500">' + escH(ll.customerName) + '</div><div style="font-size:11px;color:var(--text-3)">' + escH(ll.phoneNumber) + '</div></td><td class="table-td">' + escH(ll.carInterested || '–') + '</td><td class="table-td">' + (ll.score ? '<span class="badge ' + scoreBadge(ll.score) + '">' + ll.score + '</span>' : '–') + '</td><td class="table-td" style="font-size:11px;color:var(--text-3)">' + fmtDateShort(ll.created_at) + '</td></tr>'; }).join('') + '</tbody></table></div></div>';
+  return html + '<div class="card" style="overflow:hidden"><div style="overflow-x:auto"><table><thead><tr><th class="table-th table-th-num">#</th><th class="table-th">Customer</th><th class="table-th">Car Interested</th><th class="table-th">Visit Date</th><th class="table-th">Score</th><th class="table-th">Added</th></tr></thead><tbody>' + l.map(function (ll, i) { return '<tr><td class="table-td-num">' + (i + 1) + '</td><td class="table-td"><div style="color:var(--text-1);font-weight:500">' + escH(ll.customerName) + '</div><div style="font-size:11px;color:var(--text-3)">' + escH(ll.phoneNumber) + '</div></td><td class="table-td">' + escH(ll.carInterested || '–') + '</td><td class="table-td">' + (ll.visitDate ? '<span style="color:var(--emerald);font-weight:500;font-size:12px">' + fmtDateShort(ll.visitDate) + '</span>' : '<span style="color:var(--text-3)">–</span>') + '</td><td class="table-td">' + (ll.score ? '<span class="badge ' + scoreBadge(ll.score) + '">' + ll.score + '</span>' : '–') + '</td><td class="table-td" style="font-size:11px;color:var(--text-3)">' + fmtDateShort(ll.created_at) + '</td></tr>'; }).join('') + '</tbody></table></div></div>';
 }
 function renderDTVehicles(vehicles) {
   var s = (STATE.detVSearch || '').toLowerCase();
@@ -741,14 +963,29 @@ function renderAnalytics() {
   }
 
   var plans = { STARTER: 0, GROWTH: 0, ENTERPRISE: 0 };
-  dList.forEach(function (x) { plans[x.plan] = (plans[x.plan] || 0) + 1; });
+  // Normalize plan names to uppercase so 'starter', 'enterprise' etc. are counted properly
+  dList.forEach(function (x) {
+    var planKey = String(x.plan || '').toUpperCase();
+    if (plans.hasOwnProperty(planKey)) {
+      plans[planKey]++;
+    } else {
+      plans[planKey] = (plans[planKey] || 0) + 1;
+    }
+  });
   var tL = lList.length, tC = cList.length, tV = vList.length;
   var act = dList.filter(function (x) { return x.isActive; }).length;
   var planRates = { STARTER: 99, GROWTH: 249, ENTERPRISE: 599 }, planColors = { STARTER: '#4a5a72', GROWTH: '#38bdf8', ENTERPRISE: '#fbbf24' };
   var monthlyRevenue = Object.entries(plans).reduce(function (s, e) { return s + e[1] * (planRates[e[0]] || 0); }, 0);
   var planTotal = Object.values(plans).reduce(function (s, v) { return s + v; }, 0) || 1;
-  var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'], now = new Date().getMonth();
-  var monthCalls = months.slice(0, now + 1).map(function (m, i) { return Math.round(tC / 12 * (0.4 + i * 0.07 + Math.random() * 0.3)); });
+  var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  var now = new Date().getMonth();
+  // Build real monthly call counts from actual call data
+  var monthCalls = months.slice(0, now + 1).map(function (m, i) {
+    return cList.filter(function (x) {
+      var d = new Date(x.call_at || x.created_at);
+      return d.getMonth() === i && d.getFullYear() === new Date().getFullYear();
+    }).length;
+  });
   var maxMC = Math.max.apply(null, monthCalls) || 1;
 
   return '<div class="page-header"><div class="page-title font-display">Platform Analytics</div><div class="page-sub">Insights and metrics powered by CallVora AI</div></div>' +
@@ -758,12 +995,48 @@ function renderAnalytics() {
     '<div class="stat-card accent"><div class="stat-icon stat-icon-accent" style="color:var(--amber)">' + icon('dollar', 16) + '</div><div><div class="stat-value" style="font-size:18px">₹' + monthlyRevenue.toLocaleString() + '</div><div class="stat-label">Est. MRR</div></div></div>' +
     '</div>' +
     '<div class="card card-p" style="margin-bottom:20px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px"><div class="section-title" style="margin:0">' + icon('trending', 15) + ' Monthly Call Volume</div><span style="font-size:12px;color:var(--text-3)">Jan–' + months[now] + '</span></div>' +
-    '<div class="bar-chart" style="height:140px">' + monthCalls.map(function (v, i) { var pct = Math.round((v / maxMC) * 100), isNow = i === monthCalls.length - 1; return '<div class="bar-col"><div class="bar-val">' + v + '</div><div style="height:' + (pct || 4) + '%;background:' + (isNow ? 'linear-gradient(to top,var(--amber),#fbbf24)' : 'rgba(245,158,11,.25)') + ';width:100%;border-radius:4px 4px 0 0;min-height:4px;transition:height .8s"></div><div class="bar-label">' + months[i] + '</div></div>'; }).join('') + '</div></div>' +
+    '<div style="display:flex;align-items:flex-end;justify-content:space-around;gap:6px;height:160px;padding:10px 0 0;">' +
+    monthCalls.map(function (v, i) {
+      var pct = maxMC > 0 ? Math.round((v / maxMC) * 100) : 0;
+      var isNow = (i === monthCalls.length - 1);
+      var barH = Math.max(pct, 3);
+      return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;gap:4px;">' +
+        '<div style="font-size:11px;font-weight:700;color:var(--text-2);">' + v + '</div>' +
+        '<div style="width:100%;max-width:32px;height:' + barH + '%;background:' + (isNow ? 'linear-gradient(to top,var(--amber),#fbbf24)' : 'rgba(245,158,11,0.3)') + ';border-radius:4px 4px 0 0;min-height:3px;transition:height .8s;"></div>' +
+        '<div style="font-size:10px;color:var(--text-3);margin-top:4px;">' + months[i] + '</div>' +
+        '</div>';
+    }).join('') +
+    '</div></div>' +
     '<div class="three-col" style="margin-bottom:20px">' +
-    '<div class="card card-p"><div class="section-title">' + icon('dollar', 15) + ' Subscription Plans</div>' + Object.entries(plans).map(function (e) { var p = e[0], ct = e[1], pct = Math.round(ct / planTotal * 100); return '<div class="progress-row"><div class="progress-info"><div style="display:flex;align-items:center;gap:6px"><div style="width:10px;height:10px;border-radius:2px;background:' + planColors[p] + '"></div><span style="font-size:13px;color:var(--text-2)">' + p + '</span></div><span style="font-size:12px;color:var(--text-3)">' + ct + ' (' + pct + '%)</span></div><div class="progress-bar"><div class="progress-fill" data-w="' + pct + '" style="width:0;background:' + planColors[p] + '"></div></div></div>'; }).join('') + '</div>' +
+    '<div class="card card-p"><div class="section-title">' + icon('dollar', 15) + ' Subscription Plans</div>' +
+    (function () {
+      // Only show STARTER, GROWTH, ENTERPRISE (normalized, no duplicates)
+      var normalizedPlans = { STARTER: 0, GROWTH: 0, ENTERPRISE: 0 };
+      dList.forEach(function (x) {
+        var key = String(x.plan || '').toUpperCase();
+        if (key === 'STARTER') normalizedPlans.STARTER++;
+        else if (key === 'GROWTH') normalizedPlans.GROWTH++;
+        else if (key === 'ENTERPRISE') normalizedPlans.ENTERPRISE++;
+      });
+      var normTotal = Object.values(normalizedPlans).reduce(function (s, v) { return s + v; }, 0) || 1;
+      return Object.entries(normalizedPlans).map(function (e) {
+        var p = e[0], ct = e[1], pct = Math.round(ct / normTotal * 100);
+        var pc = planColors[p] || '#4a5a72';
+        return '<div class="progress-row"><div class="progress-info"><div style="display:flex;align-items:center;gap:6px"><div style="width:10px;height:10px;border-radius:2px;background:' + pc + '"></div><span style="font-size:13px;color:var(--text-2)">' + p + '</span></div><span style="font-size:12px;color:var(--text-3)">' + ct + ' (' + pct + '%)</span></div><div class="progress-bar"><div class="progress-fill" data-w="' + pct + '" style="width:0;background:' + pc + '"></div></div></div>';
+      }).join('');
+    })() +
+    '</div>' +
     '<div class="card card-p"><div class="section-title">' + icon('star', 15) + ' Top Performers</div>' + ([...dList].sort(function (a, b) { return ((b.calls || 0) + (b.leads || 0)) - ((a.calls || 0) + (a.leads || 0)); }).slice(0, 5).map(function (x, i) { var medals = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣']; return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:' + (i < 4 ? '1px solid var(--border-sub)' : 'none') + ';cursor:pointer" onclick="openDealerDetail(\'' + escQ(x.id) + '\')"><div style="font-size:15px;width:22px">' + medals[i] + '</div><div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:500;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escH(x.name) + '</div><div style="font-size:11px;color:var(--text-3)">' + ((x.calls || 0) + (x.leads || 0)) + ' activity</div></div><span class="badge ' + planBadge(x.plan) + '">' + x.plan + '</span></div>'; }).join('')) || '<div class="empty-state" style="padding:20px">No data</div>' +
     '</div>' +
-    '<div class="card card-p"><div class="section-title">' + icon('chart', 15) + ' Call Outcomes</div>' + [{ l: 'Booked Visit', v: Math.round(tC * .35), c: '#10b981' }, { l: 'Follow-up', v: Math.round(tC * .28), c: '#f59e0b' }, { l: 'Not Interested', v: Math.round(tC * .22), c: '#4a5a72' }, { l: 'Unanswered', v: Math.round(tC * .15), c: '#f43f5e' }].map(function (o) { var pct = tC > 0 ? Math.round(o.v / tC * 100) : 0; return '<div class="progress-row"><div class="progress-info"><span style="font-size:13px;color:var(--text-2)">' + o.l + '</span><span style="font-size:12px;color:var(--text-3)">' + o.v + ' (' + pct + '%)</span></div><div class="progress-bar"><div class="progress-fill" data-w="' + pct + '" style="width:0;background:' + o.c + '"></div></div></div>'; }).join('') + '</div>' +
+    '<div class="card card-p"><div class="section-title">' + icon('chart', 15) + ' Call Outcomes</div>' + (function () {
+      var anOut = { BOOKED_VISIT: 0, UNCOMPLETED: 0, COMPLETED: 0, CALL_DISCONNECTED: 0 };
+      lList.forEach(function (lead) { if (!!(lead.visitDate || lead.visit_date)) { anOut.BOOKED_VISIT++; } else { anOut.UNCOMPLETED++; } });
+      cList.forEach(function (x) { var o = String(x.outcome || '').toUpperCase(); if (o === 'CALL_DISCONNECTED' || o === 'DISCONNECTED' || o === 'UNANSWERED') { anOut.CALL_DISCONNECTED++; } else if (x.callerName && x.callerPhone && (x.duration || 0) > 0) { anOut.COMPLETED++; } });
+      var anMax = Math.max.apply(null, Object.values(anOut)) || 1;
+      var anColors = { BOOKED_VISIT: 'var(--emerald)', UNCOMPLETED: 'var(--amber)', COMPLETED: 'var(--sky)', CALL_DISCONNECTED: 'var(--rose)' };
+      var anLabels = { BOOKED_VISIT: 'Booked', UNCOMPLETED: 'Uncompleted', COMPLETED: 'Completed', CALL_DISCONNECTED: 'Disconnected' };
+      return Object.entries(anOut).map(function (e) { var pct = anMax > 0 ? Math.round((e[1] / anMax) * 100) : 0; return '<div class="progress-row"><div class="progress-info"><span style="font-size:13px;color:var(--text-2)">' + (anLabels[e[0]] || e[0]) + '</span><span style="font-size:12px;color:var(--text-3)">' + e[1] + ' (' + pct + '%)</span></div><div class="progress-bar"><div class="progress-fill" data-w="' + pct + '" style="width:0;background:' + (anColors[e[0]] || 'var(--text-3)') + '"></div></div></div>'; }).join('');
+    })() + '</div>' +
     '</div>';
 }
 
@@ -1074,7 +1347,7 @@ function openVehicleModal(id) {
     '<div class="form-group"><label>Make <span class="req">*</span></label><input id="vMake" class="form-input" value="' + escH(v ? v.make || '' : '') + '" maxlength="60" placeholder="e.g. Toyota"></div>' +
     '<div class="form-group"><label>Model <span class="req">*</span></label><input id="vModel" class="form-input" value="' + escH(v ? v.model || '' : '') + '" maxlength="60" placeholder="e.g. Camry"></div>' +
     '<div class="form-group"><label>Year <span class="req">*</span></label><input id="vYear" class="form-input" type="number" value="' + (v ? v.year || '' : '') + '" min="1900" max="2100" placeholder="e.g. 2024"></div>' +
-    '<div class="form-group"><label>Price (₹)</label><input id="vPrice" class="form-input" type="number" value="' + (v && v.price ? v.price : '') + '" min="0" placeholder="e.g. 15000"></div>' +    '<div class="form-group"><label>Fuel Type</label>' +
+    '<div class="form-group"><label>Price (₹)</label><input id="vPrice" class="form-input" type="number" value="' + (v && v.price ? v.price : '') + '" min="0" placeholder="e.g. 15000"></div>' + '<div class="form-group"><label>Fuel Type</label>' +
     '<select id="vFuel" class="form-input" onchange="document.getElementById(\'vFuelCustomWrap\').style.display = this.value === \'Other\' ? \'block\' : \'none\'">' +
     '<option value="">Select Fuel...</option>' +
     '<option value="Petrol" ' + (selectFuel === 'Petrol' ? 'selected' : '') + '>Petrol</option>' +
@@ -1130,7 +1403,7 @@ async function saveVehicle(id) {
   var selectedDealerId = adminSelectEl ? adminSelectEl.value : null;
 
   // STRICT VALIDATION
-if (!make || !model || !year) { showToast('Make, Model, and Year are required.', 'warn'); return; }  if (isAdmin && !selectedDealerId) { showToast('Please select a Dealership to assign this vehicle to.', 'warn'); return; }
+  if (!make || !model || !year) { showToast('Make, Model, and Year are required.', 'warn'); return; } if (isAdmin && !selectedDealerId) { showToast('Please select a Dealership to assign this vehicle to.', 'warn'); return; }
 
   var payload = { make: make, model: model, year: year, price: price, fuel_type: fuel, transmission: trans, mileage: mileage, is_available: avail, description: desc };
 
@@ -1200,41 +1473,6 @@ function openLeadModal(dealershipId) {
   );
 }
 
-async function toggleDealership(id) {
-  var d = STATE.dealerships.find(function (x) { return x.id === id; });
-  if (!d) return;
-
-  // 1. Determine the exact new state we want
-  var newActive = !d.isActive;
-  var newStatus = newActive ? 'active' : 'suspended'; // Keep text status perfectly in sync
-
-  // 2. Update Supabase Database
-  var sb = getSB(); if (!sb) return;
-  var r = await sb.from('dealerships').update({
-    is_active: newActive,
-    status: newStatus
-  }).eq('id', id);
-
-  if (r.error) { showToast('Error: ' + r.error.message, 'error'); return; }
-
-  // 3. INSTANT LOCAL DATA UPDATE (Fixes the double-click bug)
-  d.isActive = newActive;
-  d.is_active = newActive;
-  d.status = newStatus;
-
-  // 4. Show the correct notification dot
-  if (newActive) {
-    showToast('Dealership activated.', 'success'); // Green Dot
-  } else {
-    showToast('Dealership deactivated.', 'error'); // Red Dot
-  }
-
-  // 5. INSTANT SCREEN REFRESH
-  var cp = STATE.currentPage;
-  if (cp === 'dealerships') rerenderPage('dealerships');
-  if (cp === 'dealer-detail') rerenderPage('dealer-detail');
-  if (cp === 'admin') rerenderPage('admin');
-}
 
 async function saveLead(id, dealershipId) {
   var name = sanitizeInput(document.getElementById('lName').value.trim());
@@ -1624,11 +1862,7 @@ async function renderRecharge() {
     .limit(5);
 
   var historyHtml = (historyData && historyData.length > 0)
-    ? historyData.map(h => `
-            <div style="padding:10px; border-bottom:1px solid #eee; font-size:12px;">
-                <strong>${h.dealership_name}</strong><br>
-                <span style="color:var(--emerald)">New Cycle: ${new Date(h.new_cycle_date).toLocaleDateString()}</span>
-            </div>`).join('')
+    ? historyData.map(function(h) { return '<div style="padding:10px;border-bottom:1px solid var(--border-sub);font-size:12px"><strong>' + escH(h.dealership_name) + '</strong><br><span style="color:var(--emerald)">New Cycle: ' + escH(new Date(h.new_cycle_date).toLocaleDateString()) + '</span></div>'; }).join('')
     : '<div style="padding:20px; text-align:center; color:#999;">No history yet.</div>';
 
   // RENDER THE UI
@@ -1645,7 +1879,7 @@ async function renderRecharge() {
                 <div class="form-group">
                   <label>Select Dealership</label>
                   <select id="rech-dealer" class="form-input">
-                      ${STATE.dealerships.map(d => `<option value="${d.id}">${d.name} (${d.plan.toUpperCase()})</option>`).join('')}
+                      ${STATE.dealerships.map(d => `<option value="${escH(String(d.id))}">${escH(d.name)} (${escH(String(d.plan || '').toUpperCase())})</option>`).join('')}
                   </select>
                 </div>
                 <div class="form-group">
