@@ -606,9 +606,11 @@ tbody tr { transition: background .1s; }
   font-weight: 600; 
 }
 .ms-row strong { 
-  font-size: 22px; 
+  font-size: clamp(16px, 4vw, 22px); /* Makes the font shrink dynamically if it gets too tight */
   color: var(--text-1); 
   font-family: 'Syne', sans-serif; 
+  word-break: break-word; /* Prevents overflow */
+  line-height: 1.2;
 }
 .ms-row.total-row { 
   background: rgba(245,158,11,0.05); 

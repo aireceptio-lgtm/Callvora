@@ -1268,8 +1268,28 @@ function showMetricDetail(type) {
     const sold = STATE.vehicles.filter(v => !v.isAvailable);
     const totalVal = STATE.vehicles.reduce((s, v) => s + (parseFloat(v.price) || 0), 0);
     const availVal = avail.reduce((s, v) => s + (parseFloat(v.price) || 0), 0);
-    bodyHtml = `<div class="metric-summary"><div class="ms-row"><span>Total Vehicles</span><strong>${STATE.vehicles.length}</strong></div><div class="ms-row"><span>Available</span><strong>${avail.length}</strong></div><div class="ms-row"><span>Sold/Unavailable</span><strong>${sold.length}</strong></div><div class="ms-row"><span>Available Value</span><strong>₹${availVal.toLocaleString()}</strong></div><div class="ms-row total-row"><span>Total Inventory Value</span><strong>₹${totalVal.toLocaleString()}</strong></div></div>
-    <div class="modal-table-wrap"><table class="data-table"><thead><tr><th>#</th><th>Year</th><th>Make</th><th>Model</th><th>Price</th><th>Status</th></tr></thead><tbody>${STATE.vehicles.map((v, i) => `<tr><td>${i + 1}</td><td>${escH(String(v.year || ''))}</td><td>${escH(v.make || '')}</td><td>${escH(v.model || '')}</td><td>₹${parseFloat(v.price || 0).toLocaleString()}</td><td><span class="badge ${v.isAvailable ? 'badge-success' : 'badge-neutral'}">${v.isAvailable ? 'Available' : 'Unavailable'}</span></td></tr>`).join('')}</tbody></table></div>`;
+    
+    // Split into two rows for better spacing to handle large financial numbers
+    bodyHtml = `
+      <div class="metric-summary" style="grid-template-columns: repeat(3, 1fr); margin-bottom: 12px;">
+        <div class="ms-row"><span>Total Vehicles</span><strong>${STATE.vehicles.length}</strong></div>
+        <div class="ms-row"><span>Available</span><strong>${avail.length}</strong></div>
+        <div class="ms-row"><span>Sold/Unavailable</span><strong>${sold.length}</strong></div>
+      </div>
+      <div class="metric-summary" style="grid-template-columns: repeat(2, 1fr);">
+        <div class="ms-row" style="background: rgba(16,185,129,0.05); border-color: rgba(16,185,129,0.2);">
+          <span>Available Value</span><strong style="color: var(--emerald);">₹${availVal.toLocaleString()}</strong>
+        </div>
+        <div class="ms-row total-row">
+          <span>Total Inventory Value</span><strong>₹${totalVal.toLocaleString()}</strong>
+        </div>
+      </div>
+      <div class="modal-table-wrap">
+        <table class="data-table">
+          <thead><tr><th>#</th><th>Year</th><th>Make</th><th>Model</th><th>Price</th><th>Status</th></tr></thead>
+          <tbody>${STATE.vehicles.map((v, i) => `<tr><td>${i + 1}</td><td>${escH(String(v.year || ''))}</td><td>${escH(v.make || '')}</td><td>${escH(v.model || '')}</td><td>₹${parseFloat(v.price || 0).toLocaleString()}</td><td><span class="badge ${v.isAvailable ? 'badge-success' : 'badge-neutral'}">${v.isAvailable ? 'Available' : 'Unavailable'}</span></td></tr>`).join('')}</tbody>
+        </table>
+      </div>`;
   } else if (type === 'cost') {
     title = 'Call Costs Breakdown';
     const totalCost = STATE.calls.reduce((s, c) => s + (parseFloat(c.cost) || 0), 0);
