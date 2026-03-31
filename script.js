@@ -384,7 +384,7 @@ function renderCars() {
     '<button class="pill-filter' + (STATE.vehicleFilter === 'available' ? ' active' : '') + '" onclick="STATE.vehicleFilter=\'available\';rerenderPage(\'cars\')">Available</button>' +
     '<button class="pill-filter' + (STATE.vehicleFilter === 'sold' ? ' active' : '') + '" onclick="STATE.vehicleFilter=\'sold\';rerenderPage(\'cars\')">Sold</button></div>' +
     '<div class="card" style="overflow:hidden"><div style="overflow-x:auto"><table><thead><tr>' +
-    '<th class="table-th table-th-num">#</th><th class="table-th">Make &amp; Model</th><th class="table-th">Year</th><th class="table-th">Fuel</th><th class="table-th">Transmission</th><th class="table-th">Kilometre</th><th class="table-th">Price</th><th class="table-th">Status</th><th class="table-th">Description</th><th class="table-th"></th>' +
+    '<th class="table-th table-th-num">#</th><th class="table-th">Make &amp; Model</th><th class="table-th">Year</th><th class="table-th">Fuel</th><th class="table-th">Transmission</th><th class="table-th">Mileage</th><th class="table-th">Price</th><th class="table-th">Status</th><th class="table-th">Description</th><th class="table-th"></th>' +
     '</tr></thead><tbody>' +
     (filtered.length === 0 ? '<tr><td colspan="10"><div class="empty-state">' + icon('car', 28) + '<br>No vehicles found</div></td></tr>' :
       filtered.map(function (v, i) {
@@ -675,7 +675,7 @@ function renderAllVehicles() {
     '<div class="filters-bar"><div style="position:relative;flex:1;min-width:180px"><div style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-3);pointer-events:none">' + icon('search', 14) + '</div><input class="input" name="search" aria-label="Search" style="padding-left:38px" placeholder="Search make, model, year..." value="' + escH(STATE.adminVSearch) + '" oninput="STATE.adminVSearch=this.value;rerenderPage(\'all-vehicles\')" maxlength="100"></div>' +
     '<select class="input" style="width:auto;min-width:180px" onchange="STATE.adminVDealer=this.value;rerenderPage(\'all-vehicles\')">' + dOpts + '</select></div>' +
     '<div class="card" style="overflow:hidden"><div style="overflow-x:auto"><table><thead><tr>' +
-    '<th class="table-th table-th-num">#</th><th class="table-th">Dealership</th><th class="table-th">Make &amp; Model</th><th class="table-th">Year</th><th class="table-th">Fuel</th><th class="table-th">Transmission</th><th class="table-th">Kilometre</th><th class="table-th">Price</th><th class="table-th">Status</th><th class="table-th"></th>' +
+    '<th class="table-th table-th-num">#</th><th class="table-th">Dealership</th><th class="table-th">Make &amp; Model</th><th class="table-th">Year</th><th class="table-th">Fuel</th><th class="table-th">Transmission</th><th class="table-th">Mileage</th><th class="table-th">Price</th><th class="table-th">Status</th><th class="table-th"></th>' +
     '</tr></thead><tbody>' +
     (v.length === 0 ? '<tr><td colspan="10"><div class="empty-state">' + icon('car', 28) + '<br>No vehicles found</div></td></tr>' :
       v.map(function (vv, i) {
@@ -1394,7 +1394,7 @@ function openVehicleModal(id) {
     '<div id="vTransCustomWrap" style="display:' + (isCustomTrans ? 'block' : 'none') + '; margin-top:8px;">' +
     '<input id="vTransCustom" class="form-input" placeholder="Enter custom transmission" value="' + (isCustomTrans ? escH(vTransVal) : '') + '" maxlength="60">' +
     '</div></div>' +
-    '<div class="form-group"><label>Kilometre</label><input id="vMileage" class="form-input" type="number" value="' + (v ? v.mileage || '' : '') + '" min="0" placeholder="e.g. 45000 km"></div>' +
+    '<div class="form-group"><label>Mileage</label><input id="vMileage" class="form-input" type="number" value="' + (v ? v.mileage || '' : '') + '" min="0" placeholder="e.g. 45000 km"></div>' +
     '<div class="form-group"><label>Available</label><select id="vAvail" class="form-input"><option value="true" ' + (v && v.isAvailable ? 'selected' : '') + '>Yes</option><option value="false" ' + (v && !v.isAvailable ? 'selected' : '') + '>No</option></select></div>' +
     '</div>' +
     '<div class="form-group"><label>Description</label><textarea id="vDesc" class="form-input" rows="3" maxlength="500" placeholder="Add vehicle details...">' + escH(v ? v.description || '' : '') + '</textarea></div>' +
