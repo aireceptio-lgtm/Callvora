@@ -53,7 +53,7 @@ function planBadge(p) { return { ENTERPRISE: 'badge-warning', GROWTH: 'badge-inf
 function roleBadge(r) { return { ADMIN: 'badge-admin', CLIENT: 'badge-neutral' }[r] || 'badge-neutral'; }
 
 /* ── DATA NORMALIZERS ─────────────────────────────────────────── */
-function nv(v) { return Object.assign({}, v, { fuelType: v.fuel_type || v.fuelType || '', isAvailable: v.is_available != null ? v.is_available : (v.isAvailable != null ? v.isAvailable : true), dealershipId: v.dealership_id || v.dealershipId || null, mileage: parseInt(v.mileage, 10) || 0, price: parseFloat(v.price) || 0, transmission: v.transmission || 'AUTOMATIC', description: v.description || '', make: v.make || '', model: v.model || '', year: v.year || '' }); }
+function nv(v) { return Object.assign({}, v, { fuelType: v.fuel_type || v.fuelType || '', isAvailable: v.is_available != null ? v.is_available : (v.isAvailable != null ? v.isAvailable : true), dealershipId: v.dealership_id || v.dealershipId || null, mileage: parseInt(v.mileage, 10) || 0, kilometres: parseInt(v.kilometres, 10) || 0, price: parseFloat(v.price) || 0, transmission: v.transmission || 'AUTOMATIC', description: v.description || '', make: v.make || '', model: v.model || '', year: v.year || '' }); }
 function nl(l) { return Object.assign({}, l, { customerName: l.customer_name || l.customerName || '', phoneNumber: l.phone_number || l.customer_phone || l.phoneNumber || l.customerPhone || '', carInterested: l.car_interested || l.carInterested || '', visitDate: l.visit_date || l.visitDate || null, dealershipId: l.dealership_id || l.dealershipId || null, score: l.score || 'COLD', isContacted: l.is_contacted != null ? l.is_contacted : (l.isContacted || false), callSummary: l.call_summary || l.callSummary || '' }); }
 function nc(c) { return Object.assign({}, c, { callerName: c.caller_name || c.callerName || '', callerPhone: c.caller_phone || c.callerPhone || '', recordingUrl: c.recording_url || c.recordingUrl || null, dealershipId: c.dealership_id || c.dealershipId || null, duration: parseInt(c.duration, 10) || 0, outcome: c.outcome || 'UNANSWERED', call_at: c.call_at || c.created_at || new Date().toISOString(), cost: parseFloat(c.cost) || 0, transcript: c.transcript || '' }); }
 function nd(d) { return Object.assign({}, d, { isActive: d.is_active != null ? d.is_active : (d.isActive != null ? d.isActive : true), status: d.status || 'active', leads: parseInt(d.leads, 10) || 0, calls: parseInt(d.calls, 10) || 0, vehicles: parseInt(d.vehicles, 10) || 0, agent_id: d.agent_id || null, minute_limit: d.minute_limit || null, cycle_start_date: d.cycle_start_date || d.created_at || new Date().toISOString() }); } function nu(u) { return Object.assign({}, u, { dealershipId: u.dealership_id || u.dealershipId || null, name: u.name || u.email || '', role: u.role || 'CLIENT' }); }
@@ -384,7 +384,7 @@ function renderCars() {
     '<button class="pill-filter' + (STATE.vehicleFilter === 'available' ? ' active' : '') + '" onclick="STATE.vehicleFilter=\'available\';rerenderPage(\'cars\')">Available</button>' +
     '<button class="pill-filter' + (STATE.vehicleFilter === 'sold' ? ' active' : '') + '" onclick="STATE.vehicleFilter=\'sold\';rerenderPage(\'cars\')">Sold</button></div>' +
     '<div class="card" style="overflow:hidden"><div style="overflow-x:auto"><table><thead><tr>' +
-    '<th class="table-th table-th-num">#</th><th class="table-th">Make &amp; Model</th><th class="table-th">Year</th><th class="table-th">Fuel</th><th class="table-th">Transmission</th><th class="table-th">Mileage</th><th class="table-th">Price</th><th class="table-th">Status</th><th class="table-th">Description</th><th class="table-th"></th>' +
+    '<th class="table-th table-th-num">#</th><th class="table-th">Make &amp; Model</th><th class="table-th">Year</th><th class="table-th">Fuel</th><th class="table-th">Transmission</th><th class="table-th">Kilometres</th><th class="table-th">Mileage</th><th class="table-th">Price</th><th class="table-th">Status</th><th class="table-th">Description</th><th class="table-th"></th>' +
     '</tr></thead><tbody>' +
     (filtered.length === 0 ? '<tr><td colspan="10"><div class="empty-state">' + icon('car', 28) + '<br>No vehicles found</div></td></tr>' :
       filtered.map(function (v, i) {
@@ -394,7 +394,8 @@ function renderCars() {
           '<td class="table-td">' + escH(v.year) + '</td>' +
           '<td class="table-td">' + escH(v.fuelType) + '</td>' +
           '<td class="table-td">' + escH((v.transmission || '').replace(/_/g, ' ')) + '</td>' +
-          '<td class="table-td">' + (v.mileage || 0).toLocaleString() + ' km</td>' +
+          '<td class="table-td">' + (v.kilometres || 0).toLocaleString() + ' km</td>' +
+          '<td class="table-td">' + (v.mileage || 0).toLocaleString() + ' km/L</td>' +
           '<td class="table-td" style="font-weight:600;color:var(--text-1)">' + fmt(v.price) + '</td>' +
           '<td class="table-td"><span class="badge ' + (v.isAvailable ? 'badge-success' : 'badge-neutral') + '">' + (v.isAvailable ? 'Available' : 'Sold') + '</span></td>' +
           '<td class="table-td" style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px">' + escH((v.description || '').slice(0, 60)) + '</td>' +
@@ -675,14 +676,14 @@ function renderAllVehicles() {
     '<div class="filters-bar"><div style="position:relative;flex:1;min-width:180px"><div style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-3);pointer-events:none">' + icon('search', 14) + '</div><input class="input" name="search" aria-label="Search" style="padding-left:38px" placeholder="Search make, model, year..." value="' + escH(STATE.adminVSearch) + '" oninput="STATE.adminVSearch=this.value;rerenderPage(\'all-vehicles\')" maxlength="100"></div>' +
     '<select class="input" style="width:auto;min-width:180px" onchange="STATE.adminVDealer=this.value;rerenderPage(\'all-vehicles\')">' + dOpts + '</select></div>' +
     '<div class="card" style="overflow:hidden"><div style="overflow-x:auto"><table><thead><tr>' +
-    '<th class="table-th table-th-num">#</th><th class="table-th">Dealership</th><th class="table-th">Make &amp; Model</th><th class="table-th">Year</th><th class="table-th">Fuel</th><th class="table-th">Transmission</th><th class="table-th">Mileage</th><th class="table-th">Price</th><th class="table-th">Status</th><th class="table-th"></th>' +
+    '<th class="table-th table-th-num">#</th><th class="table-th">Dealership</th><th class="table-th">Make &amp; Model</th><th class="table-th">Year</th><th class="table-th">Fuel</th><th class="table-th">Transmission</th><th class="table-th">Kilometres</th><th class="table-th">Mileage</th><th class="table-th">Price</th><th class="table-th">Status</th><th class="table-th"></th>' +
     '</tr></thead><tbody>' +
     (v.length === 0 ? '<tr><td colspan="10"><div class="empty-state">' + icon('car', 28) + '<br>No vehicles found</div></td></tr>' :
       v.map(function (vv, i) {
         var dealer = d.find(function (x) { return x.id === vv.dealershipId; }); return '<tr>' +
           '<td class="table-td-num">' + (i + 1) + '</td><td class="table-td" style="font-size:12px;color:var(--text-3)">' + escH(dealer ? dealer.name : '–') + '</td>' +
           '<td class="table-td"><span style="color:var(--text-1);font-weight:500">' + escH(vv.make) + ' ' + escH(vv.model) + '</span></td><td class="table-td">' + escH(vv.year) + '</td>' +
-          '<td class="table-td">' + escH(vv.fuelType) + '</td><td class="table-td">' + escH((vv.transmission || '').replace(/_/g, ' ')) + '</td><td class="table-td">' + (vv.mileage || 0).toLocaleString() + ' km</td>' +
+          '<td class="table-td">' + escH(vv.fuelType) + '</td><td class="table-td">' + escH((vv.transmission || '').replace(/_/g, ' ')) + '</td><td class="table-td">' + (vv.kilometres || 0).toLocaleString() + ' km</td><td class="table-td">' + (vv.mileage || 0).toLocaleString() + ' km/L</td>' +
           '<td class="table-td" style="font-weight:600;color:var(--text-1)">' + fmt(vv.price) + '</td><td class="table-td"><span class="badge ' + (vv.isAvailable ? 'badge-success' : 'badge-neutral') + '">' + (vv.isAvailable ? 'Available' : 'Sold') + '</span></td>' +
           '<td class="table-td"><div style="display:flex;gap:4px"><button onclick="openVehicleModal(\'' + escQ(vv.id) + '\')" class="btn btn-ghost btn-icon">' + icon('pencil', 14) + '</button><button onclick="promptDelete(\'vehicle\', \'' + escQ(vv.id) + '\')" class="btn btn-ghost btn-icon" style="color:var(--text-3)">' + icon('trash', 14) + '</button></div></td></tr>';
       }).join('')) +
@@ -1394,7 +1395,8 @@ function openVehicleModal(id) {
     '<div id="vTransCustomWrap" style="display:' + (isCustomTrans ? 'block' : 'none') + '; margin-top:8px;">' +
     '<input id="vTransCustom" class="form-input" placeholder="Enter custom transmission" value="' + (isCustomTrans ? escH(vTransVal) : '') + '" maxlength="60">' +
     '</div></div>' +
-    '<div class="form-group"><label>Mileage</label><input id="vMileage" class="form-input" type="number" value="' + (v ? v.mileage || '' : '') + '" min="0" placeholder="e.g. 45000 km"></div>' +
+    '<div class="form-group"><label>Mileage (km/L)</label><input id="vMileage" class="form-input" type="number" step="0.1" value="' + (v ? v.mileage || '' : '') + '" min="0" placeholder="e.g. 15.5"></div>' +
+    '<div class="form-group"><label>Kilometres Run</label><input id="vKilometres" class="form-input" type="number" value="' + (v ? v.kilometres || '' : '') + '" min="0" placeholder="e.g. 50000"></div>' +
     '<div class="form-group"><label>Available</label><select id="vAvail" class="form-input"><option value="true" ' + (v && v.isAvailable ? 'selected' : '') + '>Yes</option><option value="false" ' + (v && !v.isAvailable ? 'selected' : '') + '>No</option></select></div>' +
     '</div>' +
     '<div class="form-group"><label>Description</label><textarea id="vDesc" class="form-input" rows="3" maxlength="500" placeholder="Add vehicle details...">' + escH(v ? v.description || '' : '') + '</textarea></div>' +
@@ -1415,7 +1417,8 @@ async function saveVehicle(id) {
   var transSelect = document.getElementById('vTrans').value;
   var trans = sanitizeInput(transSelect === 'Other' ? document.getElementById('vTransCustom').value.trim() : transSelect);
 
-  var mileage = parseInt(document.getElementById('vMileage').value) || 0;
+  var mileage = parseFloat(document.getElementById('vMileage').value) || 0;
+  var kilometres = parseInt(document.getElementById('vKilometres').value) || 0;
   var avail = document.getElementById('vAvail').value === 'true';
   var desc = sanitizeInput(document.getElementById('vDesc').value.trim());
 
@@ -1427,7 +1430,7 @@ async function saveVehicle(id) {
   // STRICT VALIDATION
   if (!make || !model || !year) { showToast('Make, Model, and Year are required.', 'warn'); return; } if (isAdmin && !selectedDealerId) { showToast('Please select a Dealership to assign this vehicle to.', 'warn'); return; }
 
-  var payload = { make: make, model: model, year: year, price: price, fuel_type: fuel, transmission: trans, mileage: mileage, is_available: avail, description: desc };
+  var payload = { make: make, model: model, year: year, price: price, fuel_type: fuel, transmission: trans, mileage: mileage, kilometres: kilometres, is_available: avail, description: desc };
 
   if (selectedDealerId) { payload.dealership_id = selectedDealerId; }
   else if (!isAdmin && cu && cu.dealershipId) { payload.dealership_id = cu.dealershipId; }
