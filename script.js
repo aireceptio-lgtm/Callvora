@@ -121,24 +121,24 @@ async function handleLogin() {
 function resetLoginBtn() { var b = document.getElementById('login-btn'); if (!b) return; b.disabled = false; b.innerHTML = 'Sign in <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>'; }
 function showLoginError(msg) { document.getElementById('login-error-msg').textContent = sanitizeText(msg, 300); document.getElementById('login-error').classList.remove('hidden'); }
 function hideLoginError() { document.getElementById('login-error').classList.add('hidden'); }
-async function logout() { 
-  var c = getSB(); 
+async function logout() {
+  var c = getSB();
   if (c) {
     c.removeAllChannels(); // Kills the ghost listeners to prevent data leaks
-    await c.auth.signOut().catch(function () { }); 
+    await c.auth.signOut().catch(function () { });
   }
-  
-  STATE.currentUser = null; STATE.vehicles = []; STATE.leads = []; STATE.calls = []; STATE.dealerships = []; STATE.users = []; STATE.aiMessages = []; STATE.aiTyping = false; STATE.vehicleSearch = ''; STATE.vehicleFilter = ''; STATE.leadFilter = ''; STATE.callFilter = ''; STATE.clientLSearch = ''; STATE.clientCSearch = ''; STATE.adminVSearch = ''; STATE.adminVDealer = ''; STATE.adminLSearch = ''; STATE.adminLDealer = ''; STATE.adminLScore = ''; STATE.adminCSearch = ''; STATE.adminCDealer = ''; STATE.adminCOut = ''; STATE.dSearch = ''; STATE.dStat = ''; STATE.dPlan = ''; STATE.adminAnaDealer = ''; STATE.aiDealerFilter = ''; STATE.undoStack = []; STATE.redoStack = []; 
-  
-  document.getElementById('app').style.display = 'none'; 
-  document.getElementById('login-screen').style.display = 'flex'; 
-  document.getElementById('login-email').value = ''; 
-  document.getElementById('login-pass').value = ''; 
-  document.getElementById('login-pass').type = 'password'; 
-  document.getElementById('eye-show').style.display = 'block'; 
-  document.getElementById('eye-hide').style.display = 'none'; 
-  hideLoginError(); 
-  resetLoginBtn(); 
+
+  STATE.currentUser = null; STATE.vehicles = []; STATE.leads = []; STATE.calls = []; STATE.dealerships = []; STATE.users = []; STATE.aiMessages = []; STATE.aiTyping = false; STATE.vehicleSearch = ''; STATE.vehicleFilter = ''; STATE.leadFilter = ''; STATE.callFilter = ''; STATE.clientLSearch = ''; STATE.clientCSearch = ''; STATE.adminVSearch = ''; STATE.adminVDealer = ''; STATE.adminLSearch = ''; STATE.adminLDealer = ''; STATE.adminLScore = ''; STATE.adminCSearch = ''; STATE.adminCDealer = ''; STATE.adminCOut = ''; STATE.dSearch = ''; STATE.dStat = ''; STATE.dPlan = ''; STATE.adminAnaDealer = ''; STATE.aiDealerFilter = ''; STATE.undoStack = []; STATE.redoStack = [];
+
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('login-email').value = '';
+  document.getElementById('login-pass').value = '';
+  document.getElementById('login-pass').type = 'password';
+  document.getElementById('eye-show').style.display = 'block';
+  document.getElementById('eye-hide').style.display = 'none';
+  hideLoginError();
+  resetLoginBtn();
 }
 /* ── APP INIT ─────────────────────────────────────────────────── */
 function initApp() {
@@ -207,7 +207,7 @@ function navigate(pageId) {
 function rerenderPage(pageId) {
   var p = document.getElementById('page-' + pageId);
   if (p && p.classList.contains('active') && _renders[pageId]) {
-    
+
     // 1. Capture current focus and cursor position
     var activeEl = document.activeElement;
     var isInput = activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA');
@@ -218,12 +218,12 @@ function rerenderPage(pageId) {
     var result = _renders[pageId]();
 
     // 2. Helper to restore focus
-    var restoreFocus = function() {
+    var restoreFocus = function () {
       if (selector) {
         var el = p.querySelector(selector);
         if (el) {
           el.focus();
-          try { if (cursorPos !== null) el.setSelectionRange(cursorPos, cursorPos); } catch(e){}
+          try { if (cursorPos !== null) el.setSelectionRange(cursorPos, cursorPos); } catch (e) { }
         }
       }
       setTimeout(animateBars, 50);
@@ -311,7 +311,7 @@ function renderDashboard() {
   var myDealer = STATE.dealerships.find(function (x) { return x.id === STATE.currentUser.dealershipId; });
   if (myDealer && myDealer.minute_limit) {
     var stats = getDealerStats(myDealer, c);
-    autoSuspendCheck(myDealer, stats).catch(function() {}); // Fire and forget safely
+    autoSuspendCheck(myDealer, stats).catch(function () { }); // Fire and forget safely
     if (stats.isExpired) {
       limitAlert = '<div class="alert alert-error" style="margin-bottom:20px;font-size:14px">🚨 <b>CRITICAL:</b> Billing limit reached (' + stats.usedMin.toFixed(3) + ' / ' + stats.limit + ' min, ' + stats.daysLeft + ' days left). AI is paused. Contact Admin to recharge.</div>';
     } else if (stats.usedMin >= stats.limit * 0.85 || stats.daysLeft <= 5) {
@@ -384,7 +384,7 @@ function renderCars() {
     '<button class="pill-filter' + (STATE.vehicleFilter === 'available' ? ' active' : '') + '" onclick="STATE.vehicleFilter=\'available\';rerenderPage(\'cars\')">Available</button>' +
     '<button class="pill-filter' + (STATE.vehicleFilter === 'sold' ? ' active' : '') + '" onclick="STATE.vehicleFilter=\'sold\';rerenderPage(\'cars\')">Sold</button></div>' +
     '<div class="card" style="overflow:hidden"><div style="overflow-x:auto"><table><thead><tr>' +
-    '<th class="table-th table-th-num">#</th><th class="table-th">Make &amp; Model</th><th class="table-th">Year</th><th class="table-th">Fuel</th><th class="table-th">Transmission</th><th class="table-th">Mileage</th><th class="table-th">Price</th><th class="table-th">Status</th><th class="table-th">Description</th><th class="table-th"></th>' +
+    '<th class="table-th table-th-num">#</th><th class="table-th">Make &amp; Model</th><th class="table-th">Year</th><th class="table-th">Fuel</th><th class="table-th">Transmission</th><th class="table-th">Kilometre</th><th class="table-th">Price</th><th class="table-th">Status</th><th class="table-th">Description</th><th class="table-th"></th>' +
     '</tr></thead><tbody>' +
     (filtered.length === 0 ? '<tr><td colspan="10"><div class="empty-state">' + icon('car', 28) + '<br>No vehicles found</div></td></tr>' :
       filtered.map(function (v, i) {
@@ -394,7 +394,7 @@ function renderCars() {
           '<td class="table-td">' + escH(v.year) + '</td>' +
           '<td class="table-td">' + escH(v.fuelType) + '</td>' +
           '<td class="table-td">' + escH((v.transmission || '').replace(/_/g, ' ')) + '</td>' +
-          '<td class="table-td">' + (v.mileage || 0).toLocaleString() + ' mi</td>' +
+          '<td class="table-td">' + (v.mileage || 0).toLocaleString() + ' km</td>' +
           '<td class="table-td" style="font-weight:600;color:var(--text-1)">' + fmt(v.price) + '</td>' +
           '<td class="table-td"><span class="badge ' + (v.isAvailable ? 'badge-success' : 'badge-neutral') + '">' + (v.isAvailable ? 'Available' : 'Sold') + '</span></td>' +
           '<td class="table-td" style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px">' + escH((v.description || '').slice(0, 60)) + '</td>' +
@@ -675,14 +675,14 @@ function renderAllVehicles() {
     '<div class="filters-bar"><div style="position:relative;flex:1;min-width:180px"><div style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-3);pointer-events:none">' + icon('search', 14) + '</div><input class="input" name="search" aria-label="Search" style="padding-left:38px" placeholder="Search make, model, year..." value="' + escH(STATE.adminVSearch) + '" oninput="STATE.adminVSearch=this.value;rerenderPage(\'all-vehicles\')" maxlength="100"></div>' +
     '<select class="input" style="width:auto;min-width:180px" onchange="STATE.adminVDealer=this.value;rerenderPage(\'all-vehicles\')">' + dOpts + '</select></div>' +
     '<div class="card" style="overflow:hidden"><div style="overflow-x:auto"><table><thead><tr>' +
-    '<th class="table-th table-th-num">#</th><th class="table-th">Dealership</th><th class="table-th">Make &amp; Model</th><th class="table-th">Year</th><th class="table-th">Fuel</th><th class="table-th">Transmission</th><th class="table-th">Mileage</th><th class="table-th">Price</th><th class="table-th">Status</th><th class="table-th"></th>' +
+    '<th class="table-th table-th-num">#</th><th class="table-th">Dealership</th><th class="table-th">Make &amp; Model</th><th class="table-th">Year</th><th class="table-th">Fuel</th><th class="table-th">Transmission</th><th class="table-th">Kilometre</th><th class="table-th">Price</th><th class="table-th">Status</th><th class="table-th"></th>' +
     '</tr></thead><tbody>' +
     (v.length === 0 ? '<tr><td colspan="10"><div class="empty-state">' + icon('car', 28) + '<br>No vehicles found</div></td></tr>' :
       v.map(function (vv, i) {
         var dealer = d.find(function (x) { return x.id === vv.dealershipId; }); return '<tr>' +
           '<td class="table-td-num">' + (i + 1) + '</td><td class="table-td" style="font-size:12px;color:var(--text-3)">' + escH(dealer ? dealer.name : '–') + '</td>' +
           '<td class="table-td"><span style="color:var(--text-1);font-weight:500">' + escH(vv.make) + ' ' + escH(vv.model) + '</span></td><td class="table-td">' + escH(vv.year) + '</td>' +
-          '<td class="table-td">' + escH(vv.fuelType) + '</td><td class="table-td">' + escH((vv.transmission || '').replace(/_/g, ' ')) + '</td><td class="table-td">' + (vv.mileage || 0).toLocaleString() + ' mi</td>' +
+          '<td class="table-td">' + escH(vv.fuelType) + '</td><td class="table-td">' + escH((vv.transmission || '').replace(/_/g, ' ')) + '</td><td class="table-td">' + (vv.mileage || 0).toLocaleString() + ' km</td>' +
           '<td class="table-td" style="font-weight:600;color:var(--text-1)">' + fmt(vv.price) + '</td><td class="table-td"><span class="badge ' + (vv.isAvailable ? 'badge-success' : 'badge-neutral') + '">' + (vv.isAvailable ? 'Available' : 'Sold') + '</span></td>' +
           '<td class="table-td"><div style="display:flex;gap:4px"><button onclick="openVehicleModal(\'' + escQ(vv.id) + '\')" class="btn btn-ghost btn-icon">' + icon('pencil', 14) + '</button><button onclick="promptDelete(\'vehicle\', \'' + escQ(vv.id) + '\')" class="btn btn-ghost btn-icon" style="color:var(--text-3)">' + icon('trash', 14) + '</button></div></td></tr>';
       }).join('')) +
@@ -878,10 +878,10 @@ function renderDealerDetail() {
         var pct = dtOutMax > 0 ? Math.round((e[1] / dtOutMax) * 100) : 0;
         var barH = Math.max(pct, 2);
         return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;">' +
-               '<div style="font-size:11px;font-weight:700;color:var(--text-1);margin-bottom:4px;">' + e[1] + '</div>' +
-               '<div style="width:28px;height:' + barH + '%;background:' + (dtColors[e[0]] || 'var(--text-3)') + ';border-radius:4px 4px 0 0;min-height:3px;"></div>' +
-               '<div style="font-size:9px;color:var(--text-3);margin-top:6px;text-align:center;">' + (dtLabels[e[0]] || e[0]) + '</div>' +
-               '</div>';
+          '<div style="font-size:11px;font-weight:700;color:var(--text-1);margin-bottom:4px;">' + e[1] + '</div>' +
+          '<div style="width:28px;height:' + barH + '%;background:' + (dtColors[e[0]] || 'var(--text-3)') + ';border-radius:4px 4px 0 0;min-height:3px;"></div>' +
+          '<div style="font-size:9px;color:var(--text-3);margin-top:6px;text-align:center;">' + (dtLabels[e[0]] || e[0]) + '</div>' +
+          '</div>';
       }).join('') +
       '</div></div>' +
       '<div class="card card-p"><div class="section-title">' + icon('trending', 15) + ' Lead Scores</div>' +
@@ -899,11 +899,12 @@ function renderDTCalls(calls) {
   var c = calls.filter(function (x) { return (!s || (x.callerName || '').toLowerCase().includes(s) || (x.callerPhone || '').toLowerCase().includes(s)) && (!fO || x.outcome === fO); });
   var html = '<div class="filters-bar"><div style="position:relative;flex:1;min-width:180px"><div style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-3);pointer-events:none">' + icon('search', 14) + '</div><input class="input" style="padding-left:38px" placeholder="Search caller..." value="' + escH(STATE.detCSearch) + '" oninput="STATE.detCSearch=this.value;rerenderDealerDetail()" maxlength="100"></div><select class="input" style="width:auto;min-width:140px" onchange="STATE.detCOut=this.value;rerenderDealerDetail()"><option value="">All Outcomes</option><option value="BOOKED_VISIT" ' + (fO === 'BOOKED_VISIT' ? 'selected' : '') + '>Booked</option><option value="FOLLOW_UP" ' + (fO === 'FOLLOW_UP' ? 'selected' : '') + '>Follow Up</option><option value="UNANSWERED" ' + (fO === 'UNANSWERED' ? 'selected' : '') + '>Unanswered</option></select></div>';
   if (c.length === 0) return html + '<div class="empty-state">' + icon('phone', 28) + '<br>No calls found</div>';
-  return html + '<div class="card" style="overflow:hidden"><div style="overflow-x:auto"><table><thead><tr><th class="table-th table-th-num">#</th><th class="table-th">Date</th><th class="table-th">Caller</th><th class="table-th">Duration</th><th class="table-th">Outcome</th><th class="table-th">Cost</th><th class="table-th">Transcript</th><th class="table-th">Recording</th></tr></thead><tbody>' + c.map(function (cc, i) { return '<tr><td class="table-td-num">' + (i + 1) + '</td><td class="table-td" style="font-size:12px">' + fmtDate(cc.call_at) + '</td><td class="table-td"><div style="color:var(--text-1);font-weight:500">' + escH(cc.callerName || '–') + '</div><div style="font-size:11px;color:var(--text-3)">' + escH(cc.callerPhone) + '</div></td><td class="table-td">' + fmtDuration(cc.duration) + '</td><td class="table-td"><span class="badge ' + outcomeBadge(cc.outcome) + '">' + outcomeLabel(cc.outcome) + '</span></td><td class="table-td"><span class="cost-badge">' + fmtCost(cc.cost) + '</span></td>' +
-        '<td class="table-td">' + (cc.transcript ? '<button onclick="showTranscript(\'' + escQ(cc.id) + '\')" class="btn btn-ghost btn-sm" style="font-size:11px">' + icon('eye', 12) + ' View</button>' : '<span style="color:var(--text-3);font-size:12px">None</span>') + '</td>' +
-        '<td class="table-td">' + (cc.recordingUrl ? '<button onclick="playRecording(\'' + escQ(cc.id) + '\')" class="btn btn-ghost btn-sm" style="font-size:11px;color:var(--sky)">' + icon('play', 12) + ' Play</button>' : '<span style="color:var(--text-3);font-size:12px">\u2013</span>') + '</td>' +
-        '</tr>';
-    }).join('') + '</tbody></table></div></div>';
+  return html + '<div class="card" style="overflow:hidden"><div style="overflow-x:auto"><table><thead><tr><th class="table-th table-th-num">#</th><th class="table-th">Date</th><th class="table-th">Caller</th><th class="table-th">Duration</th><th class="table-th">Outcome</th><th class="table-th">Cost</th><th class="table-th">Transcript</th><th class="table-th">Recording</th></tr></thead><tbody>' + c.map(function (cc, i) {
+    return '<tr><td class="table-td-num">' + (i + 1) + '</td><td class="table-td" style="font-size:12px">' + fmtDate(cc.call_at) + '</td><td class="table-td"><div style="color:var(--text-1);font-weight:500">' + escH(cc.callerName || '–') + '</div><div style="font-size:11px;color:var(--text-3)">' + escH(cc.callerPhone) + '</div></td><td class="table-td">' + fmtDuration(cc.duration) + '</td><td class="table-td"><span class="badge ' + outcomeBadge(cc.outcome) + '">' + outcomeLabel(cc.outcome) + '</span></td><td class="table-td"><span class="cost-badge">' + fmtCost(cc.cost) + '</span></td>' +
+      '<td class="table-td">' + (cc.transcript ? '<button onclick="showTranscript(\'' + escQ(cc.id) + '\')" class="btn btn-ghost btn-sm" style="font-size:11px">' + icon('eye', 12) + ' View</button>' : '<span style="color:var(--text-3);font-size:12px">None</span>') + '</td>' +
+      '<td class="table-td">' + (cc.recordingUrl ? '<button onclick="playRecording(\'' + escQ(cc.id) + '\')" class="btn btn-ghost btn-sm" style="font-size:11px;color:var(--sky)">' + icon('play', 12) + ' Play</button>' : '<span style="color:var(--text-3);font-size:12px">\u2013</span>') + '</td>' +
+      '</tr>';
+  }).join('') + '</tbody></table></div></div>';
 }
 function renderDTLeads(leads) {
   var s = (STATE.detLSearch || '').toLowerCase(), fS = STATE.detLScore || '';
@@ -1202,8 +1203,9 @@ async function sendAIMessage() {
 
   // === PASTE THIS NEW TEAM BLOCK HERE ===
   ctx += '\n=== CALLVORA TEAM DETAILS ===\n';
-  ctx += 'If asked who developed or built you: You were developed by Abhinand.\n';
-  ctx += 'If asked about the founder or CEO: The Founder is Manu Krishnan from Nilambur.\n';
+  ctx += 'If asked who developed or built you: You were developed by Abhinand A R.\n';
+  ctx += 'If asked about the founder (singular) or founders (plural) or CEO: There are three Founders: Manu krishna, Abhinand A R, and Alwin Jose from Nilambur. Always list all three.\n';
+  ctx += 'If asked about security or ethical hacking: Manu krishna from Nilambur is the Ethical Hacker and Security Controller.\n';
   ctx += 'If asked about billing, finance, or payments: Finance is handled by the Finance Controller, Alwin Jose from Nilambur.\n';
   // =======================================
 
@@ -1268,7 +1270,7 @@ function showMetricDetail(type) {
     const sold = STATE.vehicles.filter(v => !v.isAvailable);
     const totalVal = STATE.vehicles.reduce((s, v) => s + (parseFloat(v.price) || 0), 0);
     const availVal = avail.reduce((s, v) => s + (parseFloat(v.price) || 0), 0);
-    
+
     // Split into two rows for better spacing to handle large financial numbers
     bodyHtml = `
       <div class="metric-summary" style="grid-template-columns: repeat(3, 1fr); margin-bottom: 12px;">
@@ -1392,7 +1394,7 @@ function openVehicleModal(id) {
     '<div id="vTransCustomWrap" style="display:' + (isCustomTrans ? 'block' : 'none') + '; margin-top:8px;">' +
     '<input id="vTransCustom" class="form-input" placeholder="Enter custom transmission" value="' + (isCustomTrans ? escH(vTransVal) : '') + '" maxlength="60">' +
     '</div></div>' +
-    '<div class="form-group"><label>Mileage</label><input id="vMileage" class="form-input" type="number" value="' + (v ? v.mileage || '' : '') + '" min="0" placeholder="e.g. 45000"></div>' +
+    '<div class="form-group"><label>Kilometre</label><input id="vMileage" class="form-input" type="number" value="' + (v ? v.mileage || '' : '') + '" min="0" placeholder="e.g. 45000 km"></div>' +
     '<div class="form-group"><label>Available</label><select id="vAvail" class="form-input"><option value="true" ' + (v && v.isAvailable ? 'selected' : '') + '>Yes</option><option value="false" ' + (v && !v.isAvailable ? 'selected' : '') + '>No</option></select></div>' +
     '</div>' +
     '<div class="form-group"><label>Description</label><textarea id="vDesc" class="form-input" rows="3" maxlength="500" placeholder="Add vehicle details...">' + escH(v ? v.description || '' : '') + '</textarea></div>' +
@@ -1882,7 +1884,7 @@ async function renderRecharge() {
     .limit(5);
 
   var historyHtml = (historyData && historyData.length > 0)
-    ? historyData.map(function(h) { return '<div style="padding:10px;border-bottom:1px solid var(--border-sub);font-size:12px"><strong>' + escH(h.dealership_name) + '</strong><br><span style="color:var(--emerald)">New Cycle: ' + escH(new Date(h.new_cycle_date).toLocaleDateString()) + '</span></div>'; }).join('')
+    ? historyData.map(function (h) { return '<div style="padding:10px;border-bottom:1px solid var(--border-sub);font-size:12px"><strong>' + escH(h.dealership_name) + '</strong><br><span style="color:var(--emerald)">New Cycle: ' + escH(new Date(h.new_cycle_date).toLocaleDateString()) + '</span></div>'; }).join('')
     : '<div style="padding:20px; text-align:center; color:#999;">No history yet.</div>';
 
   // RENDER THE UI

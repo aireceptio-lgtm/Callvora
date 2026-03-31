@@ -23,8 +23,8 @@ serve(async (req) => {
       { global: { headers: { Authorization: authHeader } } }
     )
     
-    // Get the user object implicitly using the client's Authorization header
-    const { data: { user }, error: authError } = await supabaseClient.auth.getUser()
+    // Get the user object by passing token directly (required in edge function context)
+    const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token)
     if (authError || !user) throw new Error(`Unauthorized request: ${authError?.message || 'Invalid user token'}`)
 
     // Get user's role to check if they are ADMIN
@@ -101,7 +101,10 @@ If the user asks about something outside the CRM (like "Nilambur" or any other t
 All financial values, prices, and costs are in Indian Rupees (INR, ₹).
 Format responses clearly using markdown bullet points and bold text where appropriate. Be concise unless detail is needed.
 
-Developer Info: If (and only if) you are specifically asked about who made this CRM, who the developer is, or if you know "Abhinand", respond that the developer is "Abhinand A R" and that he is from "Nilambur, Malappuram". Be friendly about it. Do not volunteer this information otherwise.
+Developer Info: If asked about who made this CRM or developed it, respond that it was developed by "Abhinand A R" from "Nilambur, Malappuram".
+Founders: Regardless of whether the user asks for the "founder" (singular) or "founders" (plural) or "CEO", you MUST ALWAYS list all three: Manu krishna, Abhinand A R, and Alwin Jose from Nilambur. Never only name one.
+Security/Ethical Hacker: If asked about security or ethical hacking, respond that "Manu krishna" from "Nilambur" is the Ethical Hacker and Security Controller.
+Do not volunteer this information unless specifically asked. Be friendly and professional.
 
 IMPORTANT DATABASE RULES:
 You have tools to fetch, add, update, and delete records in the CRM.
