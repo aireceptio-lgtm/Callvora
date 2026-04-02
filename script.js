@@ -1846,34 +1846,125 @@ async function deleteUser(id) {
   }
 }
 
-/* ── AUTH PERSISTENCE (STAYS LOGGED IN ON REFRESH) ────────────── */
-window.addEventListener('DOMContentLoaded', async function () {
-  var sb = getSB();
-  if (!sb) return;
+/* ── CAPTCHA SYSTEM ─────────────────────────────────────────────── */
+var _holdTimer = null;
+var _holdProgress = 0;
+var _isHolding = false;
+var _isVerified = false;
 
-  // Check if the browser has a saved login session
-  var { data } = await sb.auth.getSession();
-  var session = data.session;
+function applyCaptchaProgress() {
+  var ring = document.getElementById('ring-fill');
+  if (!ring) return;
+  var circumference = 2 * Math.PI * 40; // 251.327; we use 252 in HTML
+  ring.style.strokeDasharray = '252 252';
+  var offset = 252 - (_holdProgress * 252);
+  ring.style.strokeDashoffset = offset;
+}
 
-  if (session && session.user) {
-    var uid = session.user.id;
-    var email = session.user.email;
-
-    // Fetch the user's profile details
-    var uRes = await sb.from('users').select('*').eq('email', email).maybeSingle(); var role = 'CLIENT', name = email, dealershipId = null;
-
-    if (!uRes.error && uRes.data) {
-      role = String(uRes.data.role || 'CLIENT').toUpperCase();
-      name = uRes.data.name || email;
-      dealershipId = uRes.data.dealership_id || null;
+function updateHold() {
+  if (!_isHolding || _isVerified) return;
+  _holdProgress += 0.02; // Roughly 1 second to fill (50 steps * 20ms)
+  if (_holdProgress >= 1) {
+    _holdProgress = 1;
+    _isVerified = true;
+    applyCaptchaProgress();
+    
+    var shield = document.getElementById('verify-shield');
+    if (shield) shield.style.display = 'none';
+    var check = document.getElementById('verify-check');
+    if (check) check.style.display = 'block';
+    
+    var wrap = document.querySelector('.hold-btn-wrap');
+    if (wrap) wrap.classList.add('success');
+    
+    var txt = document.getElementById('verify-text');
+    if (txt) {
+      txt.textContent = 'Verified';
+      txt.classList.add('success');
     }
-
-    // Restore the app state and bypass the login screen
-    STATE.currentUser = { id: uid, email: email, role: role, name: name, dealershipId: dealershipId };
-    document.getElementById('login-screen').style.display = 'none';
-    document.getElementById('app').style.display = 'flex';
-    initApp();
+    
+    setTimeout(verifyCaptchaSuccess, 400);
+    return;
   }
+  applyCaptchaProgress();
+  _holdTimer = setTimeout(updateHold, 20);
+}
+
+function startHold(e) {
+  if (e && e.cancelable && e.type === 'touchstart') e.preventDefault();
+  if (_isVerified) return;
+  _isHolding = true;
+  updateHold();
+  var icon = document.getElementById('verify-icon');
+  if (icon) icon.style.color = 'var(--amber)';
+}
+
+function stopHold(e) {
+  if (_isVerified) return;
+  _isHolding = false;
+  if (_holdTimer) clearTimeout(_holdTimer);
+  _holdProgress = 0;
+  applyCaptchaProgress();
+  var icon = document.getElementById('verify-icon');
+  if (icon) icon.style.color = 'var(--text-2)';
+}
+
+function generateCaptcha() {
+  _isVerified = false;
+  _isHolding = false;
+  _holdProgress = 0;
+  if (_holdTimer) clearTimeout(_holdTimer);
+  applyCaptchaProgress();
+  
+  var shield = document.getElementById('verify-shield');
+  if (shield) shield.style.display = 'block';
+  var check = document.getElementById('verify-check');
+  if (check) check.style.display = 'none';
+  
+  var wrap = document.querySelector('.hold-btn-wrap');
+  if (wrap) wrap.classList.remove('success');
+  var txt = document.getElementById('verify-text');
+  if (txt) {
+    txt.textContent = 'Hold to Verify';
+    txt.classList.remove('success');
+  }
+}
+
+async function verifyCaptchaSuccess() {
+  // Passed
+  document.getElementById('captcha-screen').style.display = 'none';
+  
+  // Check if the browser has a saved login session
+  var sb = getSB();
+  if (sb) {
+    var { data } = await sb.auth.getSession();
+    var session = data.session;
+
+    if (session && session.user) {
+      var uid = session.user.id;
+      var email = session.user.email;
+      var uRes = await sb.from('users').select('*').eq('email', email).maybeSingle();
+      var role = 'CLIENT', name = email, dealershipId = null;
+      if (!uRes.error && uRes.data) {
+        role = String(uRes.data.role || 'CLIENT').toUpperCase();
+        name = uRes.data.name || email;
+        dealershipId = uRes.data.dealership_id || null;
+      }
+      STATE.currentUser = { id: uid, email: email, role: role, name: name, dealershipId: dealershipId };
+      document.getElementById('app').style.display = 'flex';
+      initApp();
+      return;
+    }
+  }
+  
+  // Not logged in or error checking session -> show login screen
+  document.getElementById('login-screen').style.display = 'flex';
+}
+
+/* ── INITIALIZATION ────────────── */
+window.addEventListener('DOMContentLoaded', async function () {
+  generateCaptcha();
+
 });
 
 async function renderRecharge() {
