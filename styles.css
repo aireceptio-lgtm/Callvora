@@ -841,8 +841,12 @@ select.form-input {
 }
 @media (max-width: 780px) {
   .cal-months-grid { grid-template-columns: repeat(2, 1fr); }
+  .cal-day { padding: 6px 2px; font-size: 12px; }
+  .cal-month-title { font-size: 12px; }
 }
-@media (max-width: 480px) {
+@media (max-width: 540px) {
   .cal-months-grid { grid-template-columns: 1fr; }
   .cal-year-nav { flex-wrap: wrap; gap: 8px; justify-content: center; }
+  .cal-day { padding: 8px 2px; font-size: 13px; min-height: 32px; }
+  .cal-days-header span { font-size: 11px; }
 }
