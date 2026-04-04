@@ -1921,32 +1921,31 @@ function getHolObj(dateStr) { return STATE.holidayDates.find(function(h) { retur
 function openHolidayModal(dealershipId, dateStr) {
   var existing = getHolObj(dateStr);
   if (existing) {
-    // Show remove confirm or edit
-    var html = '<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal-card" style="max-width:400px">' +
-      '<button onclick="closeModal()" class="modal-close">' + icon('x', 16) + '</button>' +
-      '<div class="modal-title">' + icon('calendar', 16) + ' Holiday — ' + escH(dateStr) + '</div>' +
+    openModal(
+      '<div class="modal-header-bar"><h2>' + icon('calendar', 14) + ' Holiday &mdash; ' + escH(dateStr) + '</h2><button class="modal-close-btn" onclick="closeModalDirect()">&#x2715;</button></div>' +
+      '<div class="modal-body-inner">' +
       (existing.speciality ? '<div style="margin-bottom:16px;padding:10px 14px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);border-radius:10px;font-size:13px;color:var(--amber)">' + escH(existing.speciality) + '</div>' : '') +
       '<p style="font-size:13px;color:var(--text-3);margin-bottom:20px">Remove this holiday from the calendar?</p>' +
-      '<div class="modal-footer"><button onclick="closeModal()" class="btn btn-secondary">Cancel</button>' +
+      '<div class="modal-actions"><button onclick="closeModalDirect()" class="btn btn-secondary">Cancel</button>' +
       '<button onclick="removeHoliday(\'' + escQ(dealershipId) + '\', \'' + escQ(dateStr) + '\')" class="btn btn-danger">Remove Holiday</button></div>' +
-      '</div></div>';
-    openModal(html);
+      '</div>'
+    );
   } else {
-    var html = '<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal-card" style="max-width:420px">' +
-      '<button onclick="closeModal()" class="modal-close">' + icon('x', 16) + '</button>' +
-      '<div class="modal-title">' + icon('calendar', 16) + ' Add Holiday — ' + escH(dateStr) + '</div>' +
+    openModal(
+      '<div class="modal-header-bar"><h2>' + icon('calendar', 14) + ' Add Holiday &mdash; ' + escH(dateStr) + '</h2><button class="modal-close-btn" onclick="closeModalDirect()">&#x2715;</button></div>' +
+      '<div class="modal-body-inner">' +
       '<div class="form-group"><label class="label">Speciality / Label <span style="font-size:11px;color:var(--text-3);font-weight:400">(optional)</span></label>' +
-      '<input class="input" id="hol-spec-input" placeholder="e.g. Christmas, Diwali, National Holiday..." maxlength="100" onkeydown="if(event.key===\'Enter\')addHoliday(\'' + escQ(dealershipId) + '\',\'' + escQ(dateStr) + '\',document.getElementById(\'hol-spec-input\').value)"></div>' +
-      '<div class="modal-footer"><button onclick="closeModal()" class="btn btn-secondary">Cancel</button>' +
+      '<input class="form-input" id="hol-spec-input" placeholder="e.g. Christmas, Diwali, National Holiday..." maxlength="100" onkeydown="if(event.key===\'Enter\')addHoliday(\'' + escQ(dealershipId) + '\',\'' + escQ(dateStr) + '\',document.getElementById(\'hol-spec-input\').value)"></div>' +
+      '<div class="modal-actions"><button onclick="closeModalDirect()" class="btn btn-secondary">Cancel</button>' +
       '<button onclick="addHoliday(\'' + escQ(dealershipId) + '\',\'' + escQ(dateStr) + '\',document.getElementById(\'hol-spec-input\').value)" class="btn btn-primary">' + icon('check', 14) + ' Save Holiday</button></div>' +
-      '</div></div>';
-    openModal(html);
+      '</div>'
+    );
     setTimeout(function() { var el = document.getElementById('hol-spec-input'); if (el) el.focus(); }, 100);
   }
 }
 
 async function addHoliday(dealershipId, dateStr, speciality) {
-  closeModal();
+  closeModalDirect();
   var sb = getSB(); if (!sb) return;
   var spec = (speciality || '').trim() || null;
   var r = await sb.from('dealership_holidays').insert([{ dealership_id: dealershipId, holiday_date: dateStr, speciality: spec }]);
@@ -1959,7 +1958,7 @@ async function addHoliday(dealershipId, dateStr, speciality) {
 }
 
 async function removeHoliday(dealershipId, dateStr) {
-  closeModal();
+  closeModalDirect();
   var sb = getSB(); if (!sb) return;
   var r = await sb.from('dealership_holidays').delete().eq('dealership_id', dealershipId).eq('holiday_date', dateStr);
   if (r.error) { showToast('Error removing holiday: ' + r.error.message, 'error'); return; }
