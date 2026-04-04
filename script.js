@@ -24,13 +24,14 @@ var STATE = {
   currentUser: null, currentPage: 'dashboard', vehicles: [], leads: [], calls: [], dealerships: [], users: [], expandedRow: null, vehicleSearch: '', vehicleFilter: '', leadFilter: '', callFilter: '', dealerDetailId: null, dealerDetailTab: 'overview', aiMessages: [], aiTyping: false,
   adminVSearch: '', adminVDealer: '', adminLSearch: '', adminLDealer: '', adminLScore: '', adminCSearch: '', adminCDealer: '', adminCOut: '', adminUSearch: '', adminUDealer: '', dSearch: '', dStat: '', dPlan: '', detVSearch: '', detLSearch: '', detLScore: '', detCSearch: '', detCOut: '', detUSearch: '',
   adminAnaDealer: '', aiDealerFilter: '', undoStack: [], redoStack: [],
-  clientLSearch: '', clientCSearch: ''
+  clientLSearch: '', clientCSearch: '',
+  holidayDates: [], holidayYear: new Date().getFullYear(), holidayLoading: false
 };
 /* ── NAV DEFINITIONS ──────────────────────────────────────────── */
-var CLIENT_NAV = [{ id: 'dashboard', label: 'Overview', icon: 'dashboard' }, { id: 'cars', label: 'Car Catalogue', icon: 'car' }, { id: 'leads', label: 'Leads', icon: 'users' }, { id: 'calls', label: 'Call Logs', icon: 'phone' }];
+var CLIENT_NAV = [{ id: 'dashboard', label: 'Overview', icon: 'dashboard' }, { id: 'cars', label: 'Car Catalogue', icon: 'car' }, { id: 'leads', label: 'Leads', icon: 'users' }, { id: 'calls', label: 'Call Logs', icon: 'phone' }, { id: 'holidays', label: 'Holidays', icon: 'calendar' }];
 var ADMIN_NAV = [{ id: 'admin', label: 'Overview', icon: 'dashboard', section: 'Platform' }, { id: 'dealerships', label: 'Dealerships', icon: 'building', section: '' }, { id: 'recharge', label: 'Recharge', icon: 'zap', section: 'Billing' }, { id: 'analytics', label: 'Analytics', icon: 'chart', section: '' }, { id: 'all-vehicles', label: 'All Vehicles', icon: 'car', section: 'Data Tables' }, { id: 'all-leads', label: 'All Leads', icon: 'users', section: '' }, { id: 'all-calls', label: 'All Calls', icon: 'phone', section: '' }, { id: 'all-users', label: 'All Users', icon: 'shield', section: '' }, { id: 'ai-assistant', label: 'CallVora AI', icon: 'ai', section: 'Intelligence' }];
 /* ── ICONS ────────────────────────────────────────────────────── */
-function icon(n, sz) { sz = sz || 15; var M = { dashboard: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>', car: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 17H3a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h1l3-4h9l3 4h1a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2h-2"/><circle cx="7.5" cy="17.5" r="2.5"/><circle cx="16.5" cy="17.5" r="2.5"/></svg>', users: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>', phone: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6.5 8C6.5 7.17 7.17 6.5 8 6.5h1.5c.28 0 .53.17.62.43L11.5 10l-1.5 1.25c.75 1.5 1.75 2.5 3.25 3.25L14.5 13l2.95 1.37c.27.12.43.37.43.63V16.5c0 .83-.67 1.5-1.5 1.5H16C10.48 18 6 13.52 6 8v-.5z"/></svg>', building: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4M10 10h4M10 14h4M10 18h4"/></svg>', chart: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>', plus: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>', pencil: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>', trash: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>', chevron: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>', back: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>', flame: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 3z"/></svg>', snowflake: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/><path d="m20 16-4-4 4-4M4 8l4 4-4 4M16 4l-4 4-4-4M8 20l4-4 4 4"/></svg>', check: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>', x: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>', play: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>', zap: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>', clock: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>', toggle_on: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="5" width="22" height="14" rx="7"/><circle cx="16" cy="12" r="3" fill="currentColor"/></svg>', toggle_off: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="5" width="22" height="14" rx="7"/><circle cx="8" cy="12" r="3" fill="currentColor"/></svg>', arrowup: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>', search: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>', save: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>', eye: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>', shield: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>', trending: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>', star: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>', dollar: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>', ai: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2a4 4 0 0 1 4 4v1h1a3 3 0 0 1 3 3v2a3 3 0 0 1-3 3h-1v1a4 4 0 0 1-8 0v-1H7a3 3 0 0 1-3-3v-2a3 3 0 0 1 3-3h1V6a4 4 0 0 1 4-4z"/><circle cx="9" cy="10" r="1" fill="currentColor"/><circle cx="15" cy="10" r="1" fill="currentColor"/></svg>', send: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>', robot: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M12 11V6"/><circle cx="12" cy="4" r="2"/><path d="M7 15h.01M17 15h.01M7 19h10"/></svg>', wallet: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg>', receipt: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M16 8H8M16 12H8M12 16H8"/></svg>', timer: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>', user_plus: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>', refresh: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>', bell: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>' }; return (M[n] || '').replace(/SZ/g, sz); }
+function icon(n, sz) { sz = sz || 15; var M = { calendar: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>', dashboard: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>', car: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 17H3a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h1l3-4h9l3 4h1a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2h-2"/><circle cx="7.5" cy="17.5" r="2.5"/><circle cx="16.5" cy="17.5" r="2.5"/></svg>', users: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>', phone: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6.5 8C6.5 7.17 7.17 6.5 8 6.5h1.5c.28 0 .53.17.62.43L11.5 10l-1.5 1.25c.75 1.5 1.75 2.5 3.25 3.25L14.5 13l2.95 1.37c.27.12.43.37.43.63V16.5c0 .83-.67 1.5-1.5 1.5H16C10.48 18 6 13.52 6 8v-.5z"/></svg>', building: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4M10 10h4M10 14h4M10 18h4"/></svg>', chart: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>', plus: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>', pencil: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>', trash: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>', chevron: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>', back: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>', flame: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 3z"/></svg>', snowflake: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/><path d="m20 16-4-4 4-4M4 8l4 4-4 4M16 4l-4 4-4-4M8 20l4-4 4 4"/></svg>', check: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>', x: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>', play: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>', zap: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>', clock: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>', toggle_on: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="5" width="22" height="14" rx="7"/><circle cx="16" cy="12" r="3" fill="currentColor"/></svg>', toggle_off: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="5" width="22" height="14" rx="7"/><circle cx="8" cy="12" r="3" fill="currentColor"/></svg>', arrowup: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>', search: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>', save: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>', eye: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>', shield: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>', trending: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>', star: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>', dollar: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>', ai: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2a4 4 0 0 1 4 4v1h1a3 3 0 0 1 3 3v2a3 3 0 0 1-3 3h-1v1a4 4 0 0 1-8 0v-1H7a3 3 0 0 1-3-3v-2a3 3 0 0 1 3-3h1V6a4 4 0 0 1 4-4z"/><circle cx="9" cy="10" r="1" fill="currentColor"/><circle cx="15" cy="10" r="1" fill="currentColor"/></svg>', send: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>', robot: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M12 11V6"/><circle cx="12" cy="4" r="2"/><path d="M7 15h.01M17 15h.01M7 19h10"/></svg>', wallet: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg>', receipt: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M16 8H8M16 12H8M12 16H8"/></svg>', timer: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>', user_plus: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>', refresh: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>', bell: '<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>' }; return (M[n] || '').replace(/SZ/g, sz); }
 /* ── SECURITY ─────────────────────────────────────────────────── */
 function escH(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#x27;').replace(/\//g, '&#x2F;'); }
 function escQ(s) { return String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
@@ -218,7 +219,7 @@ async function listenToLeads(did) { var c = getSB(); if (!c) return; var doFetch
 async function listenToCalls(did) { var c = getSB(); if (!c) return; var doFetch = async function () { var q = c.from('calls').select('*').order('call_at', { ascending: false }); if (did) q = q.eq('dealership_id', did); var r = await q; if (r.data) { STATE.calls = r.data.map(nc); var cp = STATE.currentPage; if (['calls', 'all-calls', 'dashboard', 'admin', 'dealer-detail', 'analytics'].includes(cp)) rerenderPage(cp); } }; await doFetch(); c.channel('ch-call').on('postgres_changes', { event: '*', schema: 'public', table: 'calls' }, doFetch).subscribe(); }
 
 /* ── NAVIGATION ───────────────────────────────────────────────── */
-var _renders = { dashboard: renderDashboard, cars: renderCars, leads: renderLeads, calls: renderCalls, admin: renderAdminOverview, dealerships: renderDealerships, analytics: renderAnalytics, recharge: renderRecharge, 'dealer-detail': renderDealerDetail, 'ai-assistant': renderAIAssistant, 'all-vehicles': renderAllVehicles, 'all-leads': renderAllLeads, 'all-calls': renderAllCalls, 'all-users': renderAllUsers };
+var _renders = { dashboard: renderDashboard, cars: renderCars, leads: renderLeads, calls: renderCalls, admin: renderAdminOverview, dealerships: renderDealerships, analytics: renderAnalytics, recharge: renderRecharge, 'dealer-detail': renderDealerDetail, 'ai-assistant': renderAIAssistant, 'all-vehicles': renderAllVehicles, 'all-leads': renderAllLeads, 'all-calls': renderAllCalls, 'all-users': renderAllUsers, holidays: renderHolidays };
 
 function navigate(pageId) {
   document.getElementById('sidebar').classList.remove('open');
@@ -881,7 +882,7 @@ function renderDealerDetail() {
   var dVal = dV.reduce(function (s, v) { return s + (v.price || 0); }, 0);
   var stats = getDealerStats(d, dC);
   var tab = STATE.dealerDetailTab || 'overview';
-  var tabs = [{ id: 'overview', label: 'Overview' }, { id: 'calls', label: 'Calls (' + dC.length + ')' }, { id: 'leads', label: 'Leads (' + dL.length + ')' }, { id: 'vehicles', label: 'Vehicles (' + dV.length + ')' }, { id: 'users', label: 'Users (' + dU.length + ')' }, { id: 'settings', label: 'Settings' }];
+  var tabs = [{ id: 'overview', label: 'Overview' }, { id: 'calls', label: 'Calls (' + dC.length + ')' }, { id: 'leads', label: 'Leads (' + dL.length + ')' }, { id: 'vehicles', label: 'Vehicles (' + dV.length + ')' }, { id: 'users', label: 'Users (' + dU.length + ')' }, { id: 'holidays', label: '🗓 Holidays' }, { id: 'settings', label: 'Settings' }];
   var header = '<button class="back-btn" onclick="navigate(\'dealerships\')">' + icon('back', 14) + ' Back to Dealerships</button>' +
     '<div class="dealer-detail-header"><div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:16px">' +
     '<div style="display:flex;align-items:center;gap:16px"><div style="width:52px;height:52px;border-radius:12px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.2);display:flex;align-items:center;justify-content:center;font-family:\'Syne\',sans-serif;font-weight:700;font-size:18px;color:var(--amber)">' + escH((d.name || '?').slice(0, 2).toUpperCase()) + '</div>' +
@@ -934,6 +935,12 @@ function renderDealerDetail() {
   else if (tab === 'leads') { tabContent = renderDTLeads(dL); }
   else if (tab === 'vehicles') { tabContent = renderDTVehicles(dV); }
   else if (tab === 'users') { tabContent = renderDTUsers(dU); }
+  else if (tab === 'holidays') {
+    // renderDTHolidays is async — return a Promise so navigate() handles it correctly
+    return renderDTHolidays(d.id).then(function(holHtml) {
+      return header + tabBar + holHtml;
+    });
+  }
   else if (tab === 'settings') { tabContent = renderDTSettings(d); }
   return header + tabBar + tabContent;
 }
@@ -1254,6 +1261,18 @@ async function sendAIMessage() {
 
   ctx += '\nNOTE: You (the AI) have tools to fetch detailed records from the database if needed. I am only providing you the high-level summary counts right now to save bandwidth.\n';
   // -------------------------------------------------
+
+  // === HOLIDAY CONTEXT ===
+  ctx += '\n=== DEALERSHIP HOLIDAYS ===\n';
+  if (STATE.holidayDates && STATE.holidayDates.length > 0) {
+    ctx += 'This dealership has the following holidays: ' + STATE.holidayDates.join(', ') + '\n';
+  } else {
+    ctx += 'No holidays are currently set for this dealership.\n';
+  }
+  ctx += 'IMPORTANT RULE: When a customer mentions a visit date, check if that date matches any holiday above.\n';
+  ctx += 'If the date IS a holiday: inform the customer the showroom will be closed on that day and politely ask them to choose another date.\n';
+  ctx += 'If the date is NOT a holiday: confirm the appointment normally and enthusiastically.\n';
+  // =======================
 
   var history = STATE.aiMessages.slice(-10).map(function (m) { return { role: m.role === 'user' ? 'user' : 'model', parts: [{ text: m.content }] }; });
   var body = {
@@ -1886,6 +1905,88 @@ async function deleteUser(id) {
   } catch (err) {
     showToast('Error deleting user: ' + err.message, 'error');
   }
+}
+
+/* ── HOLIDAY CALENDAR SYSTEM ────────────────────────────────────── */
+
+async function loadHolidays(dealershipId) {
+  var sb = getSB(); if (!sb || !dealershipId) { STATE.holidayDates = []; return; }
+  var r = await sb.from('dealership_holidays').select('holiday_date').eq('dealership_id', dealershipId);
+  STATE.holidayDates = (r.data || []).map(function(h) { return h.holiday_date; });
+}
+
+async function toggleHoliday(dealershipId, dateStr) {
+  var sb = getSB(); if (!sb) return;
+  var exists = STATE.holidayDates.indexOf(dateStr) !== -1;
+  if (exists) {
+    var r = await sb.from('dealership_holidays').delete().eq('dealership_id', dealershipId).eq('holiday_date', dateStr);
+    if (r.error) { showToast('Error removing holiday: ' + r.error.message, 'error'); return; }
+    STATE.holidayDates = STATE.holidayDates.filter(function(d) { return d !== dateStr; });
+    showToast('Holiday removed: ' + dateStr, 'info');
+  } else {
+    var r2 = await sb.from('dealership_holidays').insert([{ dealership_id: dealershipId, holiday_date: dateStr }]);
+    if (r2.error) { showToast('Error adding holiday: ' + r2.error.message, 'error'); return; }
+    STATE.holidayDates.push(dateStr);
+    showToast('Holiday set: ' + dateStr, 'success');
+  }
+  var cp = STATE.currentPage;
+  if (cp === 'holidays') rerenderPage('holidays');
+  else if (cp === 'dealer-detail') rerenderPage('dealer-detail');
+}
+
+function buildCalendarHTML(dealershipId, year) {
+  var today = new Date();
+  var todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+  var months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  var days = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+  var totalHols = STATE.holidayDates.filter(function(d) { return d.startsWith(year + '-'); }).length;
+
+  var yearNav = '<div class="cal-year-nav">' +
+    '<button class="btn btn-ghost btn-sm" onclick="STATE.holidayYear=' + (year - 1) + ';rerenderPage(STATE.currentPage===\'holidays\'?\'holidays\':\'dealer-detail\')">&#8592; ' + (year - 1) + '</button>' +
+    '<span class="cal-year-label">' + icon('calendar', 15) + ' ' + year + '</span>' +
+    '<button class="btn btn-ghost btn-sm" onclick="STATE.holidayYear=' + (year + 1) + ';rerenderPage(STATE.currentPage===\'holidays\'?\'holidays\':\'dealer-detail\')">+ ' + (year + 1) + ' &#8594;</button>' +
+    '</div>' +
+    '<div class="cal-holiday-count">' + (totalHols > 0 ? '🔴 ' + totalHols + ' holiday' + (totalHols > 1 ? 's' : '') + ' set for ' + year : 'No holidays set for ' + year) + '</div>';
+
+  var grid = '<div class="cal-months-grid">';
+  for (var m = 0; m < 12; m++) {
+    var firstDay = new Date(year, m, 1).getDay();
+    var daysInMonth = new Date(year, m + 1, 0).getDate();
+    var monthStr = String(m + 1).padStart(2, '0');
+    grid += '<div class="cal-month">';
+    grid += '<div class="cal-month-title">' + months[m] + '</div>';
+    grid += '<div class="cal-days-header">' + days.map(function(d) { return '<span>' + d + '</span>'; }).join('') + '</div>';
+    grid += '<div class="cal-days-grid">';
+    for (var blank = 0; blank < firstDay; blank++) { grid += '<span></span>'; }
+    for (var d2 = 1; d2 <= daysInMonth; d2++) {
+      var dayStr = year + '-' + monthStr + '-' + String(d2).padStart(2, '0');
+      var isHol = STATE.holidayDates.indexOf(dayStr) !== -1;
+      var isTod = dayStr === todayStr;
+      var cls = 'cal-day' + (isHol ? ' holiday' : '') + (isTod ? ' today' : '');
+      grid += '<span class="' + cls + '" onclick="toggleHoliday(\'' + escQ(dealershipId) + '\', \'' + dayStr + '\')" title="' + dayStr + '">' + d2 + (isHol ? '<span class="cal-tick">✓</span>' : '') + '</span>';
+    }
+    grid += '</div></div>';
+  }
+  grid += '</div>';
+  return yearNav + grid;
+}
+
+async function renderHolidays() {
+  var did = STATE.currentUser && STATE.currentUser.dealershipId;
+  var dealer = STATE.dealerships.find(function(x) { return x.id === did; });
+  if (!did) {
+    return '<div class="page-header"><div class="page-title font-display">Holidays</div></div><div class="empty-state">' + icon('calendar', 28) + '<br>No dealership linked to your account.</div>';
+  }
+  await loadHolidays(did);
+  var year = STATE.holidayYear || new Date().getFullYear();
+  return '<div class="page-header-row"><div><div class="page-title font-display">' + icon('calendar', 16) + ' Holiday Calendar</div><div class="page-sub">' + escH(dealer ? dealer.name : '') + ' — click any date to mark/unmark as holiday</div></div></div>' +
+    '<div class="card card-p" style="margin-top:8px">' + buildCalendarHTML(did, year) + '</div>';
+}
+
+async function renderDTHolidays(dealershipId) {
+  await loadHolidays(dealershipId);
+  var year = STATE.holidayYear || new Date().getFullYear();
+  return '<div class="card card-p" style="margin-top:8px"><p style="font-size:13px;color:var(--text-3);margin-bottom:16px">Click any date to mark or unmark it as a holiday for this dealership.</p>' + buildCalendarHTML(dealershipId, year) + '</div>';
 }
 
 /* ── CAPTCHA SYSTEM ─────────────────────────────────────────────── */
