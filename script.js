@@ -52,10 +52,46 @@ function scoreBadge(s) { return { HOT: 'badge-hot', WARM: 'badge-warm', COLD: 'b
 function planBadge(p) { return { ENTERPRISE: 'badge-warning', GROWTH: 'badge-info', STARTER: 'badge-neutral' }[p] || 'badge-neutral'; }
 function roleBadge(r) { return { ADMIN: 'badge-admin', CLIENT: 'badge-neutral' }[r] || 'badge-neutral'; }
 
+function fixVisitYear(dateStr) {
+  if (!dateStr) return null;
+  
+  var d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr; // Return as-is if it's not a valid date
+  
+  var now = new Date();
+  now.setHours(0, 0, 0, 0); // Reset time to midnight for accurate day comparison
+  
+  // Create a test date with the current year
+  var testD = new Date(d);
+  testD.setFullYear(now.getFullYear());
+  testD.setHours(0, 0, 0, 0);
+  
+  // If the date has already passed this year, push it to next year
+  if (testD < now) {
+    d.setFullYear(now.getFullYear() + 1);
+  } else {
+    // Otherwise, it's later this year
+    d.setFullYear(now.getFullYear());
+  }
+  
+  return d.toISOString();
+}
+
 /* ── DATA NORMALIZERS ─────────────────────────────────────────── */
 function nv(v) { return Object.assign({}, v, { fuelType: v.fuel_type || v.fuelType || '', isAvailable: v.is_available != null ? v.is_available : (v.isAvailable != null ? v.isAvailable : true), dealershipId: v.dealership_id || v.dealershipId || null, mileage: parseInt(v.mileage, 10) || 0, kilometres: parseInt(v.kilometres, 10) || 0, price: parseFloat(v.price) || 0, transmission: v.transmission || 'AUTOMATIC', description: v.description || '', make: v.make || '', model: v.model || '', year: v.year || '' }); }
-function nl(l) { return Object.assign({}, l, { customerName: l.customer_name || l.customerName || '', phoneNumber: l.phone_number || l.customer_phone || l.phoneNumber || l.customerPhone || '', carInterested: l.car_interested || l.carInterested || '', visitDate: l.visit_date || l.visitDate || null, dealershipId: l.dealership_id || l.dealershipId || null, score: l.score || 'COLD', isContacted: l.is_contacted != null ? l.is_contacted : (l.isContacted || false), callSummary: l.call_summary || l.callSummary || '' }); }
-function nc(c) { return Object.assign({}, c, { callerName: c.caller_name || c.callerName || '', callerPhone: c.caller_phone || c.callerPhone || '', recordingUrl: c.recording_url || c.recordingUrl || null, dealershipId: c.dealership_id || c.dealershipId || null, duration: parseInt(c.duration, 10) || 0, outcome: c.outcome || 'UNANSWERED', call_at: c.call_at || c.created_at || new Date().toISOString(), cost: parseFloat(c.cost) || 0, transcript: c.transcript || '' }); }
+function nl(l) { 
+  var rawDate = l.visit_date || l.visitDate || null;
+  return Object.assign({}, l, { 
+    customerName: l.customer_name || l.customerName || '', 
+    phoneNumber: l.phone_number || l.customer_phone || l.phoneNumber || l.customerPhone || '', 
+    carInterested: l.car_interested || l.carInterested || '', 
+    visitDate: fixVisitYear(rawDate), // <-- Fixed here
+    dealershipId: l.dealership_id || l.dealershipId || null, 
+    score: l.score || 'COLD', 
+    isContacted: l.is_contacted != null ? l.is_contacted : (l.isContacted || false), 
+    callSummary: l.call_summary || l.callSummary || '' 
+  }); 
+}function nc(c) { return Object.assign({}, c, { callerName: c.caller_name || c.callerName || '', callerPhone: c.caller_phone || c.callerPhone || '', recordingUrl: c.recording_url || c.recordingUrl || null, dealershipId: c.dealership_id || c.dealershipId || null, duration: parseInt(c.duration, 10) || 0, outcome: c.outcome || 'UNANSWERED', call_at: c.call_at || c.created_at || new Date().toISOString(), cost: parseFloat(c.cost) || 0, transcript: c.transcript || '' }); }
 function nd(d) { return Object.assign({}, d, { isActive: d.is_active != null ? d.is_active : (d.isActive != null ? d.isActive : true), status: d.status || 'active', leads: parseInt(d.leads, 10) || 0, calls: parseInt(d.calls, 10) || 0, vehicles: parseInt(d.vehicles, 10) || 0, agent_id: d.agent_id || null, minute_limit: d.minute_limit || null, cycle_start_date: d.cycle_start_date || d.created_at || new Date().toISOString() }); } function nu(u) { return Object.assign({}, u, { dealershipId: u.dealership_id || u.dealershipId || null, name: u.name || u.email || '', role: u.role || 'CLIENT' }); }
 
 /* ── TOAST ────────────────────────────────────────────────────── */
