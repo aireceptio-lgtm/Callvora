@@ -25,7 +25,7 @@ var STATE = {
   adminVSearch: '', adminVDealer: '', adminLSearch: '', adminLDealer: '', adminLScore: '', adminCSearch: '', adminCDealer: '', adminCOut: '', adminUSearch: '', adminUDealer: '', dSearch: '', dStat: '', dPlan: '', detVSearch: '', detLSearch: '', detLScore: '', detCSearch: '', detCOut: '', detUSearch: '',
   adminAnaDealer: '', aiDealerFilter: '', undoStack: [], redoStack: [],
   clientLSearch: '', clientCSearch: '',
-  holidayDates: [], holidayYear: new Date().getFullYear(), holidayLoading: false, adminHolDealer: ''
+  holidayDates: [], holidayYear: new Date().getFullYear(), holidayLoading: false, adminHolDealer: '', holSearch: ''
 };
 /* ── NAV DEFINITIONS ──────────────────────────────────────────── */
 var CLIENT_NAV = [{ id: 'dashboard', label: 'Overview', icon: 'dashboard' }, { id: 'cars', label: 'Car Catalogue', icon: 'car' }, { id: 'leads', label: 'Leads', icon: 'users' }, { id: 'calls', label: 'Call Logs', icon: 'phone' }, { id: 'holidays', label: 'Holidays', icon: 'calendar' }];
@@ -1265,7 +1265,7 @@ async function sendAIMessage() {
   // === HOLIDAY CONTEXT ===
   ctx += '\n=== DEALERSHIP HOLIDAYS ===\n';
   if (STATE.holidayDates && STATE.holidayDates.length > 0) {
-    ctx += 'This dealership has the following holidays: ' + STATE.holidayDates.join(', ') + '\n';
+    ctx += 'This dealership has the following holidays: ' + STATE.holidayDates.map(function(h) { return h.date + (h.speciality ? ' (' + h.speciality + ')' : ''); }).join(', ') + '\n';
   } else {
     ctx += 'No holidays are currently set for this dealership.\n';
   }
@@ -1911,24 +1911,60 @@ async function deleteUser(id) {
 
 async function loadHolidays(dealershipId) {
   var sb = getSB(); if (!sb || !dealershipId) { STATE.holidayDates = []; return; }
-  var r = await sb.from('dealership_holidays').select('holiday_date').eq('dealership_id', dealershipId);
-  STATE.holidayDates = (r.data || []).map(function(h) { return h.holiday_date; });
+  var r = await sb.from('dealership_holidays').select('holiday_date, speciality').eq('dealership_id', dealershipId);
+  STATE.holidayDates = (r.data || []).map(function(h) { return { date: h.holiday_date, speciality: h.speciality || '' }; });
 }
 
-async function toggleHoliday(dealershipId, dateStr) {
-  var sb = getSB(); if (!sb) return;
-  var exists = STATE.holidayDates.indexOf(dateStr) !== -1;
-  if (exists) {
-    var r = await sb.from('dealership_holidays').delete().eq('dealership_id', dealershipId).eq('holiday_date', dateStr);
-    if (r.error) { showToast('Error removing holiday: ' + r.error.message, 'error'); return; }
-    STATE.holidayDates = STATE.holidayDates.filter(function(d) { return d !== dateStr; });
-    showToast('Holiday removed: ' + dateStr, 'info');
+function isHoliday(dateStr) { return STATE.holidayDates.some(function(h) { return h.date === dateStr; }); }
+function getHolObj(dateStr) { return STATE.holidayDates.find(function(h) { return h.date === dateStr; }) || null; }
+
+function openHolidayModal(dealershipId, dateStr) {
+  var existing = getHolObj(dateStr);
+  if (existing) {
+    // Show remove confirm or edit
+    var html = '<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal-card" style="max-width:400px">' +
+      '<button onclick="closeModal()" class="modal-close">' + icon('x', 16) + '</button>' +
+      '<div class="modal-title">' + icon('calendar', 16) + ' Holiday — ' + escH(dateStr) + '</div>' +
+      (existing.speciality ? '<div style="margin-bottom:16px;padding:10px 14px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);border-radius:10px;font-size:13px;color:var(--amber)">' + escH(existing.speciality) + '</div>' : '') +
+      '<p style="font-size:13px;color:var(--text-3);margin-bottom:20px">Remove this holiday from the calendar?</p>' +
+      '<div class="modal-footer"><button onclick="closeModal()" class="btn btn-secondary">Cancel</button>' +
+      '<button onclick="removeHoliday(\'' + escQ(dealershipId) + '\', \'' + escQ(dateStr) + '\')" class="btn btn-danger">Remove Holiday</button></div>' +
+      '</div></div>';
+    openModal(html);
   } else {
-    var r2 = await sb.from('dealership_holidays').insert([{ dealership_id: dealershipId, holiday_date: dateStr }]);
-    if (r2.error) { showToast('Error adding holiday: ' + r2.error.message, 'error'); return; }
-    STATE.holidayDates.push(dateStr);
-    showToast('Holiday set: ' + dateStr, 'success');
+    var html = '<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal-card" style="max-width:420px">' +
+      '<button onclick="closeModal()" class="modal-close">' + icon('x', 16) + '</button>' +
+      '<div class="modal-title">' + icon('calendar', 16) + ' Add Holiday — ' + escH(dateStr) + '</div>' +
+      '<div class="form-group"><label class="label">Speciality / Label <span style="font-size:11px;color:var(--text-3);font-weight:400">(optional)</span></label>' +
+      '<input class="input" id="hol-spec-input" placeholder="e.g. Christmas, Diwali, National Holiday..." maxlength="100" onkeydown="if(event.key===\'Enter\')addHoliday(\'' + escQ(dealershipId) + '\',\'' + escQ(dateStr) + '\',document.getElementById(\'hol-spec-input\').value)"></div>' +
+      '<div class="modal-footer"><button onclick="closeModal()" class="btn btn-secondary">Cancel</button>' +
+      '<button onclick="addHoliday(\'' + escQ(dealershipId) + '\',\'' + escQ(dateStr) + '\',document.getElementById(\'hol-spec-input\').value)" class="btn btn-primary">' + icon('check', 14) + ' Save Holiday</button></div>' +
+      '</div></div>';
+    openModal(html);
+    setTimeout(function() { var el = document.getElementById('hol-spec-input'); if (el) el.focus(); }, 100);
   }
+}
+
+async function addHoliday(dealershipId, dateStr, speciality) {
+  closeModal();
+  var sb = getSB(); if (!sb) return;
+  var spec = (speciality || '').trim() || null;
+  var r = await sb.from('dealership_holidays').insert([{ dealership_id: dealershipId, holiday_date: dateStr, speciality: spec }]);
+  if (r.error) { showToast('Error adding holiday: ' + r.error.message, 'error'); return; }
+  STATE.holidayDates.push({ date: dateStr, speciality: spec || '' });
+  showToast('Holiday added: ' + dateStr, 'success');
+  var cp = STATE.currentPage;
+  if (cp === 'holidays') rerenderPage('holidays');
+  else if (cp === 'dealer-detail') rerenderPage('dealer-detail');
+}
+
+async function removeHoliday(dealershipId, dateStr) {
+  closeModal();
+  var sb = getSB(); if (!sb) return;
+  var r = await sb.from('dealership_holidays').delete().eq('dealership_id', dealershipId).eq('holiday_date', dateStr);
+  if (r.error) { showToast('Error removing holiday: ' + r.error.message, 'error'); return; }
+  STATE.holidayDates = STATE.holidayDates.filter(function(h) { return h.date !== dateStr; });
+  showToast('Holiday removed: ' + dateStr, 'info');
   var cp = STATE.currentPage;
   if (cp === 'holidays') rerenderPage('holidays');
   else if (cp === 'dealer-detail') rerenderPage('dealer-detail');
@@ -1939,7 +1975,8 @@ function buildCalendarHTML(dealershipId, year) {
   var todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
   var months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
   var days = ['Su','Mo','Tu','We','Th','Fr','Sa'];
-  var totalHols = STATE.holidayDates.filter(function(d) { return d.startsWith(year + '-'); }).length;
+  var yearHols = STATE.holidayDates.filter(function(h) { return h.date.startsWith(year + '-'); });
+  var totalHols = yearHols.length;
 
   var yearNav = '<div class="cal-year-nav">' +
     '<button class="btn btn-ghost btn-sm" onclick="STATE.holidayYear=' + (year - 1) + ';rerenderPage(STATE.currentPage===\'holidays\'?\'holidays\':\'dealer-detail\')">&#8592; ' + (year - 1) + '</button>' +
@@ -1960,15 +1997,55 @@ function buildCalendarHTML(dealershipId, year) {
     for (var blank = 0; blank < firstDay; blank++) { grid += '<span></span>'; }
     for (var d2 = 1; d2 <= daysInMonth; d2++) {
       var dayStr = year + '-' + monthStr + '-' + String(d2).padStart(2, '0');
-      var isHol = STATE.holidayDates.indexOf(dayStr) !== -1;
+      var holObj = getHolObj(dayStr);
       var isTod = dayStr === todayStr;
-      var cls = 'cal-day' + (isHol ? ' holiday' : '') + (isTod ? ' today' : '');
-      grid += '<span class="' + cls + '" onclick="toggleHoliday(\'' + escQ(dealershipId) + '\', \'' + dayStr + '\')" title="' + dayStr + '">' + d2 + (isHol ? '<span class="cal-tick">✓</span>' : '') + '</span>';
+      var cls = 'cal-day' + (holObj ? ' holiday' : '') + (isTod ? ' today' : '');
+      var title = holObj ? (holObj.speciality ? escH(holObj.speciality) : 'Holiday — ' + dayStr) : dayStr;
+      grid += '<span class="' + cls + '" onclick="openHolidayModal(\'' + escQ(dealershipId) + '\', \'' + dayStr + '\')" title="' + title + '">' +
+        d2 + (holObj ? '<span class="cal-tick">✓</span>' : '') +
+        (holObj && holObj.speciality ? '<span class="cal-spec-dot"></span>' : '') +
+        '</span>';
     }
     grid += '</div></div>';
   }
   grid += '</div>';
-  return yearNav + grid;
+
+  // Holiday list below calendar
+  var s = (STATE.holSearch || '').toLowerCase();
+  var filteredHols = yearHols.filter(function(h) {
+    if (!s) return true;
+    return h.date.includes(s) || (h.speciality || '').toLowerCase().includes(s);
+  }).sort(function(a, b) { return a.date > b.date ? 1 : -1; });
+
+  var holList = '<div class="cal-hol-list">' +
+    '<div class="section-title" style="margin-top:24px;margin-bottom:12px">' + icon('calendar', 14) + ' Holidays in ' + year + (filteredHols.length !== yearHols.length ? ' (' + filteredHols.length + ' of ' + yearHols.length + ')' : ' (' + yearHols.length + ')') + '</div>';
+  if (filteredHols.length === 0) {
+    holList += '<div style="text-align:center;padding:24px;color:var(--text-3);font-size:13px">' + (s ? 'No holidays match your search.' : 'No holidays set for ' + year + '.') + '</div>';
+  } else {
+    holList += filteredHols.map(function(h) {
+      var d = new Date(h.date + 'T00:00:00');
+      var dayName = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][d.getDay()];
+      return '<div class="cal-hol-item">' +
+        '<div style="display:flex;align-items:center;gap:10px">' +
+        '<div class="cal-hol-dot"></div>' +
+        '<div><div class="cal-hol-date">' + escH(h.date) + ' &mdash; ' + dayName + '</div>' +
+        (h.speciality ? '<div class="cal-hol-spec">' + escH(h.speciality) + '</div>' : '<div class="cal-hol-spec" style="color:var(--text-3);font-style:italic">No label</div>') +
+        '</div></div>' +
+        '<button onclick="openHolidayModal(\'' + escQ(dealershipId) + '\', \'' + escQ(h.date) + '\')" class="btn btn-ghost btn-sm" style="color:var(--rose)">' + icon('trash', 13) + '</button>' +
+        '</div>';
+    }).join('');
+  }
+  holList += '</div>';
+
+  return yearNav + grid + holList;
+}
+
+function buildCalendarControls(rerender) {
+  var s = STATE.holSearch || '';
+  return '<div class="filters-bar" style="margin-bottom:16px">' +
+    '<div style="position:relative;flex:1;min-width:180px"><div style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-3);pointer-events:none">' + icon('search', 14) + '</div>' +
+    '<input class="input" style="padding-left:38px" placeholder="Search holidays by date or label..." value="' + escH(s) + '" oninput="STATE.holSearch=this.value;rerenderPage(\'' + rerender + '\')" maxlength="80"></div>' +
+    '</div>';
 }
 
 async function renderHolidays() {
@@ -1976,37 +2053,37 @@ async function renderHolidays() {
   var year = STATE.holidayYear || new Date().getFullYear();
 
   if (isAdmin) {
-    // Admin: dealership picker + calendar
     var did = STATE.adminHolDealer || (STATE.dealerships[0] && STATE.dealerships[0].id) || '';
     if (!did) {
       return '<div class="page-header-row"><div><div class="page-title font-display">' + icon('calendar', 16) + ' Holiday Calendar</div><div class="page-sub">Select a dealership to manage holidays</div></div></div><div class="empty-state">' + icon('calendar', 28) + '<br>No dealerships found.</div>';
     }
     if (!STATE.adminHolDealer) STATE.adminHolDealer = did;
-    var dealer = STATE.dealerships.find(function(x) { return x.id === did; });
     await loadHolidays(did);
     var dOpts = STATE.dealerships.map(function(d) {
       return '<option value="' + escH(d.id) + '" ' + (did === d.id ? 'selected' : '') + '>' + escH(d.name) + '</option>';
     }).join('');
-    return '<div class="page-header-row"><div><div class="page-title font-display">' + icon('calendar', 16) + ' Holiday Calendar</div><div class="page-sub">Admin — click any date to mark/unmark as holiday</div></div>' +
-      '<select class="input" style="width:auto;min-width:200px" onchange="STATE.adminHolDealer=this.value;STATE.holidayYear=' + year + ';rerenderPage(\'holidays\')"><option value="">Select Dealership...</option>' + dOpts + '</select></div>' +
-      '<div class="card card-p" style="margin-top:8px">' + buildCalendarHTML(did, year) + '</div>';
+    return '<div class="page-header-row"><div><div class="page-title font-display">' + icon('calendar', 16) + ' Holiday Calendar</div><div class="page-sub">Admin — click any date to add/remove a holiday</div></div>' +
+      '<select class="input" style="width:auto;min-width:200px" onchange="STATE.adminHolDealer=this.value;STATE.holSearch=\'\';rerenderPage(\'holidays\')"><option value="">Select Dealership...</option>' + dOpts + '</select></div>' +
+      buildCalendarControls('holidays') +
+      '<div class="card card-p">' + buildCalendarHTML(did, year) + '</div>';
   }
 
-  // Client: own dealership only
   var did = STATE.currentUser && STATE.currentUser.dealershipId;
   var dealer = STATE.dealerships.find(function(x) { return x.id === did; });
   if (!did) {
     return '<div class="page-header"><div class="page-title font-display">Holidays</div></div><div class="empty-state">' + icon('calendar', 28) + '<br>No dealership linked to your account.</div>';
   }
   await loadHolidays(did);
-  return '<div class="page-header-row"><div><div class="page-title font-display">' + icon('calendar', 16) + ' Holiday Calendar</div><div class="page-sub">' + escH(dealer ? dealer.name : '') + ' — click any date to mark/unmark as holiday</div></div></div>' +
-    '<div class="card card-p" style="margin-top:8px">' + buildCalendarHTML(did, year) + '</div>';
+  return '<div class="page-header-row"><div><div class="page-title font-display">' + icon('calendar', 16) + ' Holiday Calendar</div><div class="page-sub">' + escH(dealer ? dealer.name : '') + ' — click any date to add/remove a holiday</div></div></div>' +
+    buildCalendarControls('holidays') +
+    '<div class="card card-p">' + buildCalendarHTML(did, year) + '</div>';
 }
 
 async function renderDTHolidays(dealershipId) {
   await loadHolidays(dealershipId);
   var year = STATE.holidayYear || new Date().getFullYear();
-  return '<div class="card card-p" style="margin-top:8px"><p style="font-size:13px;color:var(--text-3);margin-bottom:16px">Click any date to mark or unmark it as a holiday for this dealership.</p>' + buildCalendarHTML(dealershipId, year) + '</div>';
+  return buildCalendarControls('dealer-detail') +
+    '<div class="card card-p"><p style="font-size:13px;color:var(--text-3);margin-bottom:16px">Click any date to add or remove a holiday. Add an optional label (e.g. Diwali, Christmas).</p>' + buildCalendarHTML(dealershipId, year) + '</div>';
 }
 
 /* ── CAPTCHA SYSTEM ─────────────────────────────────────────────── */

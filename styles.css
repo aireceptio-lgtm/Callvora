@@ -836,6 +836,48 @@ select.form-input {
   font-weight: 900;
   line-height: 1;
 }
+.cal-spec-dot {
+  position: absolute;
+  bottom: 1px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--amber);
+}
+
+/* Holiday list panel */
+.cal-hol-list {
+  margin-top: 4px;
+}
+.cal-hol-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-sub);
+  transition: background .1s;
+}
+.cal-hol-item:last-child { border-bottom: none; }
+.cal-hol-item:hover { background: rgba(17,24,39,.4); }
+.cal-hol-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--rose);
+  flex-shrink: 0;
+}
+.cal-hol-date {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-1);
+}
+.cal-hol-spec {
+  font-size: 11px;
+  color: var(--amber);
+  margin-top: 2px;
+}
 @media (max-width: 1100px) {
   .cal-months-grid { grid-template-columns: repeat(3, 1fr); }
 }
