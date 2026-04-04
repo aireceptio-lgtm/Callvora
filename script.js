@@ -57,31 +57,34 @@ function nv(v) { return Object.assign({}, v, { fuelType: v.fuel_type || v.fuelTy
 function nl(l) { 
   var visit = l.visit_date || l.visitDate || null;
   
-  // --- SMART DATE FIX FOR 2001 ---
+  // --- SMART DATE FIX V2 ---
   if (visit) {
     var d = new Date(visit);
+    
     // Check if the parser incorrectly assigned the year 2001
     if (!isNaN(d.getTime()) && d.getFullYear() === 2001) {
-      var now = new Date();
-      var currentYear = now.getFullYear();
+      
+      // Compare against the date the lead was ADDED, not today
+      var refDate = l.created_at ? new Date(l.created_at) : new Date();
+      var refYear = refDate.getFullYear();
       
       var testDate = new Date(d);
-      testDate.setFullYear(currentYear);
+      testDate.setFullYear(refYear);
       
-      // Strip out the time so we are only comparing the dates
-      now.setHours(0, 0, 0, 0);
+      // Strip time so we strictly compare the calendar dates
+      refDate.setHours(0, 0, 0, 0);
       testDate.setHours(0, 0, 0, 0);
       
-      // If the date has already passed this year, push it to next year
-      if (testDate < now) {
-        d.setFullYear(currentYear + 1);
+      // If the parsed visit date is earlier than the day the lead was created, it belongs to next year
+      if (testDate < refDate) {
+        d.setFullYear(refYear + 1);
       } else {
-        d.setFullYear(currentYear);
+        d.setFullYear(refYear);
       }
       visit = d.toISOString();
     }
   }
-  // -------------------------------
+  // -------------------------
 
   return Object.assign({}, l, { 
     customerName: l.customer_name || l.customerName || '', 
@@ -93,7 +96,8 @@ function nl(l) {
     isContacted: l.is_contacted != null ? l.is_contacted : (l.isContacted || false), 
     callSummary: l.call_summary || l.callSummary || '' 
   }); 
-}function nc(c) { return Object.assign({}, c, { callerName: c.caller_name || c.callerName || '', callerPhone: c.caller_phone || c.callerPhone || '', recordingUrl: c.recording_url || c.recordingUrl || null, dealershipId: c.dealership_id || c.dealershipId || null, duration: parseInt(c.duration, 10) || 0, outcome: c.outcome || 'UNANSWERED', call_at: c.call_at || c.created_at || new Date().toISOString(), cost: parseFloat(c.cost) || 0, transcript: c.transcript || '' }); }
+}
+function nc(c) { return Object.assign({}, c, { callerName: c.caller_name || c.callerName || '', callerPhone: c.caller_phone || c.callerPhone || '', recordingUrl: c.recording_url || c.recordingUrl || null, dealershipId: c.dealership_id || c.dealershipId || null, duration: parseInt(c.duration, 10) || 0, outcome: c.outcome || 'UNANSWERED', call_at: c.call_at || c.created_at || new Date().toISOString(), cost: parseFloat(c.cost) || 0, transcript: c.transcript || '' }); }
 function nd(d) { return Object.assign({}, d, { isActive: d.is_active != null ? d.is_active : (d.isActive != null ? d.isActive : true), status: d.status || 'active', leads: parseInt(d.leads, 10) || 0, calls: parseInt(d.calls, 10) || 0, vehicles: parseInt(d.vehicles, 10) || 0, agent_id: d.agent_id || null, minute_limit: d.minute_limit || null, cycle_start_date: d.cycle_start_date || d.created_at || new Date().toISOString() }); } function nu(u) { return Object.assign({}, u, { dealershipId: u.dealership_id || u.dealershipId || null, name: u.name || u.email || '', role: u.role || 'CLIENT' }); }
 
 /* ── TOAST ────────────────────────────────────────────────────── */
